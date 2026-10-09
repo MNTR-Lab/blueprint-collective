@@ -1,15 +1,578 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Tasks · Blueprint Collective</title><style>
-:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#19334f;background:#f3f6fa}*{box-sizing:border-box}body{margin:0}header{background:#11253e;color:white;padding:22px max(20px,calc((100vw - 1050px)/2));display:flex;justify-content:space-between;align-items:center}header b{font-size:18px}main{max-width:1050px;margin:38px auto;padding:0 20px}.panel{background:#fff;border:1px solid #e1e8f0;border-radius:14px;padding:26px;box-shadow:0 6px 20px #18344d09}h1{margin:0 0 8px;font-size:27px}p{color:#6a7b8d;line-height:1.5}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}.metric{background:white;border:1px solid #e1e8f0;border-radius:12px;padding:20px}.metric strong{font-size:29px;display:block;margin-top:9px}.metric span{font-size:12px;color:#687d91}button{background:#173f6b;color:white;border:0;border-radius:8px;padding:11px 17px;font-weight:650;cursor:pointer}button.secondary{background:#eef3f8;color:#1c3b5a}input,select{font:inherit;border:1px solid #ccd8e4;border-radius:8px;padding:10px;width:100%}label{display:block;margin:20px 0 8px;font-weight:650;font-size:13px}table{border-collapse:collapse;width:100%;min-width:650px}th,td{padding:15px;text-align:left;border-bottom:1px solid #e6ecf2;font-size:13px}th{color:#65798e;background:#f7f9fc}td small{display:block;color:#718396;margin-top:4px}.scroll{overflow:auto}.hide{display:none}.message{padding:10px 0;font-size:13px;color:#ae2b36}@media(max-width:650px){.grid{grid-template-columns:1fr 1fr}header{padding:18px 20px}}</style></head><body>
-<header><b>BLUEPRINT COLLECTIVE <span style="font-weight:400;color:#b7cce1">/ My Tasks</span></b><button id="signout" class="secondary hide">Sign Out</button></header><main>
-<section id="login" class="panel" style="max-width:460px;margin:80px auto"><h1>Employee Sign In</h1><p>Use the email address your administrator invited to this workspace.</p><form id="loginform"><label for="email">Work email</label><input id="email" type="email" autocomplete="email" required placeholder="you@company.com"><p id="loginmsg" class="message"></p><button type="submit">Email Sign-In Link</button></form></section>
-<section id="workspace" class="hide"><div style="display:flex;align-items:center;justify-content:space-between;gap:15px"><div><h1>My Tasks</h1><p id="greeting">Your assigned work</p></div><button class="secondary" id="refresh">Refresh</button></div><div class="grid"><div class="metric"><span>Assigned</span><strong id="total">0</strong></div><div class="metric"><span>In Progress</span><strong id="progress">0</strong></div><div class="metric"><span>Completed</span><strong id="completed">0</strong></div></div><section class="panel"><h2 style="font-size:18px">Assigned Tasks</h2><p id="status" class="message"></p><div class="scroll"><table><thead><tr><th>Task / Project</th><th>Due Date</th><th>Priority</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div></section></section>
-</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script>
-const url='https://lbheezjanvalalinqxcd.supabase.co',key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiaGVlemphbnZhbGFsaW5xeGNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1NjIwNDcsImV4cCI6MjEwNzEzODA0N30.lDap2OWhFi3udJQorDmtEKF-WhOt62I8ZLbENQRqaoM',client=supabase.createClient(url,key),fn=url+'/functions/v1/blueprint-employee';
-const el=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function call(action,extra={}){const {data:{session}}=await client.auth.getSession();if(!session)throw Error('Please sign in');const r=await fetch(fn,{method:'POST',headers:{'Content-Type':'application/json','apikey':key,'Authorization':'Bearer '+session.access_token},body:JSON.stringify({action,...extra})});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}
-async function load(){el('status').textContent='Loading…';try{const [p,d]=await Promise.all([call('profile'),call('my_tasks')]);el('greeting').textContent='Welcome, '+p.staff.display_name;const jobs=Object.fromEntries(d.jobs.map(x=>[x.id,x.title]));el('total').textContent=d.tasks.length;el('progress').textContent=d.tasks.filter(x=>x.status==='In Progress').length;el('completed').textContent=d.tasks.filter(x=>x.status==='Completed').length;el('rows').innerHTML=d.tasks.map(t=>'<tr><td><b>'+esc(t.title)+'</b><small>'+esc(jobs[t.job_id]||'')+'</small></td><td>'+esc(t.due_date||'Not set')+'</td><td>'+esc(t.priority||'Normal')+'</td><td><select aria-label="Status for '+esc(t.title)+'" data-task="'+esc(t.id)+'">'+['To Do','In Progress','Completed'].map(v=>'<option '+(v===t.status?'selected':'')+'>'+v+'</option>').join('')+'</select></td></tr>').join('')||'<tr><td colspan="4">No tasks assigned yet.</td></tr>';el('status').textContent='';document.querySelectorAll('[data-task]').forEach(e=>e.onchange=async()=>{try{await call('update_task',{taskId:e.dataset.task,status:e.value});await load()}catch(err){el('status').textContent=err.message;await load()}})}catch(err){el('status').textContent=err.message}}
-async function show(){const {data:{session}}=await client.auth.getSession();el('login').classList.toggle('hide',!!session);el('workspace').classList.toggle('hide',!session);el('signout').classList.toggle('hide',!session);if(session)await load()}
-el('loginform').onsubmit=async e=>{e.preventDefault();el('loginmsg').textContent='Sending…';const {error}=await client.auth.signInWithOtp({email:el('email').value.trim(),options:{emailRedirectTo:location.origin+'/employee.html',shouldCreateUser:false}});el('loginmsg').textContent=error?error.message:'Check your email for a secure sign-in link.'};
-el('signout').onclick=async()=>{await client.auth.signOut();await show()};
-el('refresh').onclick=load;client.auth.onAuthStateChange(()=>setTimeout(show,0));show();
-</script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blueprint Collective</title><style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color:#18283e;background:#f3f6fa}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer}.shell{display:flex;min-height:100vh}.side{width:250px;background:#11253e;color:white;padding:24px 15px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}.brand{font-weight:800;font-size:19px;letter-spacing:-.5px;padding:7px 12px 20px}.brand small{display:block;color:#9fb3cc;font-size:11px;font-weight:500;letter-spacing:2px;margin-top:4px}.nav{display:flex;align-items:center;gap:12px;width:100%;border:0;background:transparent;color:#b8c8db;text-align:left;padding:12px 13px;border-radius:9px;margin:2px 0}.nav.active,.nav:hover{background:#263e5c;color:white}.nav span{width:20px;text-align:center}.sidebar-bottom{margin-top:auto;color:#9fb3cc;font-size:12px;padding:12px}.main{flex:1;min-width:0}.top{display:flex;justify-content:space-between;align-items:center;background:white;border-bottom:1px solid #e2e8f0;padding:18px 32px;gap:16px}.top h1{font-size:21px;margin:0}.muted{color:#78869a}.tiny{font-size:12px}.pill{border:1px solid #e2e8f0;border-radius:99px;padding:6px 11px;background:#f8fafc;color:#5b6b7e;font-size:12px}.content{padding:30px 32px;max-width:1500px;margin:auto}.heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.heading h2{font-size:25px;letter-spacing:-.6px;margin:0 0 5px}.heading p{margin:0;color:#78869a;font-size:13px}.btn{border:0;border-radius:9px;background:#163b65;color:white;padding:10px 15px;font-weight:650;font-size:13px}.btn:hover{background:#22588f}.btn.secondary{background:white;color:#244366;border:1px solid #d8e1ec}.btn.danger{background:#fff1f2;color:#a62235}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:20px}.card,.panel{background:white;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 3px 14px #172b4d06}.card{padding:21px}.card .value{font-size:30px;font-weight:800;margin:12px 0 5px}.card .label{color:#687c91;font-size:13px}.card .foot{font-size:12px;color:#94a0b0}.panel{padding:22px;margin-bottom:20px}.panel h3{font-size:16px;margin:0 0 16px}.twocol{display:grid;grid-template-columns:1.5fr 1fr;gap:20px}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:15px;flex-wrap:wrap}.field{padding:10px 12px;border:1px solid #dbe3ec;border-radius:8px;background:white;color:#263c56;min-width:170px}.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}th{background:#f8fafc;color:#77879a;font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.6px}td,th{padding:14px 12px;border-bottom:1px solid #edf0f4}tr:last-child td{border-bottom:0}.status{border-radius:99px;padding:5px 10px;background:#eaf2ff;color:#285da5;font-size:11px;font-weight:700;display:inline-block}.status.green{background:#e6f6ed;color:#21734b}.status.orange{background:#fff2dd;color:#a35c10}.status.gray{background:#f0f2f5;color:#697689}.status.red{background:#ffeaeb;color:#b33a4a}.empty{text-align:center;padding:35px;color:#8a98a8}.bar{height:8px;background:#edf1f5;border-radius:99px;overflow:hidden;margin:8px 0 15px}.bar>div{height:100%;background:#28679d}.line{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin:10px 0}.alert{background:#fff8e8;border:1px solid #f6dfae;border-radius:10px;padding:13px 16px;color:#8a621b;font-size:13px;margin-bottom:18px}.modalbg{position:fixed;inset:0;background:#0b1d35a8;display:none;align-items:center;justify-content:center;padding:20px;z-index:5}.modalbg.show{display:flex}.modal{width:100%;max-width:520px;max-height:90vh;overflow:auto;background:white;padding:25px;border-radius:16px;box-shadow:0 20px 60px #0003}.modal h3{margin:0 0 17px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.formgrid label{font-size:12px;color:#65768b;font-weight:650;display:flex;flex-direction:column;gap:5px}.formgrid input,.formgrid select,.formgrid textarea{width:100%;min-width:0;padding:10px;border:1px solid #dbe3ec;border-radius:8px;color:#253952}.wide{grid-column:1/-1}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.notice{font-size:12px;color:#718197}.businessmark{width:30px;height:30px;border-radius:8px;background:#dceafa;color:#16416b;display:grid;place-items:center;font-weight:800}.mobile-nav{display:none}.hide{display:none!important}@media(max-width:1050px){.cards{grid-template-columns:repeat(2,1fr)}.twocol{grid-template-columns:1fr}.side{width:210px}}@media(max-width:700px){.shell{display:block}.side{position:static;height:auto;width:100%;padding:12px}.brand{padding:4px}.side nav{display:flex;overflow:auto}.nav{white-space:nowrap;width:auto;font-size:12px;padding:9px}.nav span{display:none}.sidebar-bottom{display:none}.top{padding:14px}.content{padding:17px}.cards{grid-template-columns:repeat(2,1fr);gap:10px}.card{padding:14px}.card .value{font-size:24px}.heading h2{font-size:22px}.formgrid{grid-template-columns:1fr}}
+
+/* Blueprint Collective provider branding. The original logo asset is not modified. */
+.brand-logo{padding:8px 10px 24px;min-height:90px;display:flex;align-items:center;justify-content:center}
+.brand-logo img{display:block;width:100%;max-width:195px;max-height:108px;object-fit:contain}
+.brand-fallback{color:white;text-align:center;font-size:18px;font-weight:800}
+.provider-footer{margin-top:auto;border-top:1px solid rgba(255,255,255,.13);padding:17px 10px 7px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.provider-label{font-size:9px;letter-spacing:1.5px;color:#aebfd5;font-weight:700}
+.provider-footer img{display:block;max-width:145px;width:85%;max-height:65px;object-fit:contain}
+.provider-fallback{color:#e2ebf7;font-size:12px;font-weight:700}
+@media(max-width:700px){.brand-logo{min-height:0;padding:6px 4px 12px;justify-content:flex-start}.brand-logo img{max-width:145px;max-height:65px}.provider-footer{display:none}}
+</style></head><body><div class="shell"><aside class="side"><div class="brand brand-logo"><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback" style="display:none">BLUEPRINT <small>COLLECTIVE</small></span></div><nav id="nav"></nav><div class="provider-footer"><span class="provider-label">PLATFORM POWERED BY</span><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="provider-fallback" style="display:none">Blueprint Collective</span></div></aside><div class="main"><header class="top"><h1 id="topTitle">Dashboard</h1><div style="display:flex;align-items:center;gap:12px"><select id="businessSelect" class="field" aria-label="Business selector"></select><span class="pill">Demo workspace</span></div></header><main class="content" id="view"></main></div></div><div class="modalbg" id="modalbg"><div class="modal" id="modal"></div></div><script>
+const K='blueprint-crm-v1-local';const sample={businesses:[{id:'blueprint',name:'Blueprint Collective',color:'#163b65'}],records:{leads:[{id:'l1',businessId:'blueprint',name:'Morgan Parker',company:'Summit Athletics',email:'morgan@example.com',status:'Qualified',value:5200,owner:'Admin'},{id:'l2',businessId:'blueprint',name:'Taylor Reed',company:'Northstar Media',email:'taylor@example.com',status:'New',value:1800,owner:'Admin'},{id:'l3',businessId:'blueprint',name:'Jordan Lee',company:'Peak Events',email:'jordan@example.com',status:'Contacted',value:3600,owner:'Admin'}],clients:[{id:'c1',businessId:'blueprint',name:'Evergreen Sports',email:'hello@example.com',status:'Active',owner:'Admin'},{id:'c2',businessId:'blueprint',name:'Harbor Creative',email:'contact@example.com',status:'Prospect',owner:'Admin'}],contacts:[{id:'ct1',businessId:'blueprint',name:'Alex Morgan',company:'Evergreen Sports',email:'alex@example.com',status:'Primary'}],deals:[{id:'d1',businessId:'blueprint',name:'Spring Campaign',company:'Evergreen Sports',value:12000,status:'Proposal Sent',owner:'Admin'},{id:'d2',businessId:'blueprint',name:'Brand Refresh',company:'Harbor Creative',value:7500,status:'Discovery',owner:'Admin'}],jobs:[{id:'j1',businessId:'blueprint',name:'Website Refresh',company:'Evergreen Sports',status:'In Progress',owner:'Admin'}],tasks:[{id:'t1',businessId:'blueprint',name:'Follow up on proposal',company:'Evergreen Sports',status:'Open',owner:'Admin'}]},connections:[]};
+let data;try{data=JSON.parse(localStorage.getItem(K))||structuredClone(sample)}catch{data=structuredClone(sample)};let page='dashboard',business='blueprint',search='',clientTab='active',settingsTab='businesses';const navs=[['dashboard','▦','Dashboard'],['client-management','▣','Clients'],['leads','◎','Leads'],['deals','◇','Opportunities'],['jobs','▤','Jobs & Projects'],['tasks','☷','Tasks & Activities'],['settings','⚙','Settings']];const schemas={leads:{title:'Leads',fields:['name','company','email','status','value','owner'],statuses:['New','Contacted','Qualified','Unqualified','Converted']},clients:{title:'Companies & Clients',fields:['name','email','status','owner'],statuses:['Prospect','Active','Inactive','Archived']},contacts:{title:'Contacts',fields:['name','company','email','status'],statuses:['Primary','Secondary','Other']},deals:{title:'Opportunities',fields:['name','company','value','status','owner'],statuses:['Discovery','Quoting','Proposal Sent','Negotiation','Won','Lost']},jobs:{title:'Jobs & Projects',fields:['name','company','status','owner'],statuses:['Not Started','In Progress','On Hold','Completed']},tasks:{title:'Activities & Tasks',fields:['name','company','status','owner'],statuses:['Open','In Progress','Completed']}};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const save=()=>localStorage.setItem(K,JSON.stringify(data));const records=k=>data.records[k].filter(x=>x.businessId===business);const fmt=n=>'$'+Number(n||0).toLocaleString();const badge=s=>{let c=/active|won|qualified|completed/i.test(s)?'green':/new|progress|proposal|contacted/i.test(s)?'orange':/lost|unqualified/i.test(s)?'red':'gray';return `<span class="status ${c}">${esc(s)}</span>`};function render(){document.getElementById('nav').innerHTML=navs.map(([id,icon,label])=>`<button class="nav ${page===id?'active':''}" onclick="navigate('${id}')"><span>${icon}</span>${label}</button>`).join('');document.getElementById('topTitle').textContent=navs.find(n=>n[0]===page)[2];document.getElementById('businessSelect').innerHTML=data.businesses.map(b=>`<option value="${esc(b.id)}" ${business===b.id?'selected':''}>${esc(b.name)}</option>`).join('');document.getElementById('businessSelect').onchange=e=>{business=e.target.value;search='';render()};document.getElementById('view').innerHTML=page==='dashboard'?dashboard():page==='client-management'?clientManagement():schemas[page]?listPage(page):page==='connections'?connections():page==='contacts'?listPage('contacts'):page==='clients'?clientManagement():settings();}function navigate(p){page=p;search='';render()}function switchClientTab(t){clientTab=t;render()}function switchSettingsTab(t){settingsTab=t;render()}function dashboard(){const leads=records('leads'),deals=records('deals'),jobs=records('jobs'),tasks=records('tasks');let active=deals.filter(x=>!['Won','Lost'].includes(x.status));return `<div class="heading"><div><h2>Business Overview</h2><p>Track your pipeline, customers, and work in one place.</p></div><button class="btn" onclick="openRecord('leads')">+ New Lead</button></div><div class="alert">Demo workspace: sample records are fictional and saved only in this browser. Live data synchronization is not enabled.</div><div class="cards">${[['Total Leads',leads.length,'All stages'],['Open Pipeline',fmt(active.reduce((a,b)=>a+Number(b.value||0),0)),'Unclosed opportunities'],['Active Jobs',jobs.filter(x=>x.status!=='Completed').length,'In progress or pending'],['Open Tasks',tasks.filter(x=>x.status!=='Completed').length,'Follow-ups to complete']].map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="value">${x[1]}</div><div class="foot">${x[2]}</div></div>`).join('')}</div><div class="twocol"><section class="panel"><h3>Recent Leads</h3>${table('leads',leads.slice(0,5),true)}<button class="btn secondary" onclick="navigate('leads')">View all leads →</button></section><section class="panel"><h3>Sales Pipeline</h3>${schemas.deals.statuses.map(s=>{let count=deals.filter(x=>x.status===s).length;return `<div class="line"><span>${esc(s)}</span><b>${count}</b></div><div class="bar"><div style="width:${deals.length?count/deals.length*100:0}%"></div></div>`}).join('')}</section></div><section class="panel"><h3>Next Steps</h3><p class="muted">Configure your business profile and data mappings in Connections. Live synchronization will be enabled after the secure backend is deployed.</p></section>`}function table(k,items,compact=false){let fields=compact?['name','company','status']:schemas[k].fields;return `<div class="tablewrap"><table><thead><tr>${fields.map(f=>`<th>${esc(f==='name'?'Name':f)}</th>`).join('')}<th></th></tr></thead><tbody>${items.length?items.map(x=>`<tr>${fields.map(f=>`<td>${f==='status'?badge(x[f]):f==='value'?fmt(x[f]):esc(x[f])}</td>`).join('')}<td><button class="btn secondary" onclick="openRecord('${k}','${x.id}')">Edit</button></td></tr>`).join(''):`<tr><td class="empty" colspan="${fields.length+1}">No records yet</td></tr>`}</tbody></table></div>`}function listPage(k){let r=records(k).filter(x=>Object.values(x).some(v=>String(v).toLowerCase().includes(search.toLowerCase())));return `<div class="heading"><div><h2>${schemas[k].title}</h2><p>${r.length} record${r.length===1?'':'s'} in this business</p></div><button class="btn" onclick="openRecord('${k}')">+ Add ${k==='clients'?'Client':k==='deals'?'Opportunity':k==='tasks'?'Task':k==='jobs'?'Job':k==='contacts'?'Contact':'Lead'}</button></div><section class="panel"><div class="toolbar"><input id="search" class="field" placeholder="Search records..." value="${esc(search)}" oninput="search=this.value;document.getElementById('resultTable').innerHTML=table('${k}',records('${k}').filter(x=>Object.values(x).some(v=>String(v).toLowerCase().includes(search.toLowerCase()))))"><span class="pill">Business-isolated records</span></div><div id="resultTable">${table(k,r)}</div></section>`}function openRecord(k,id){let old=id?data.records[k].find(x=>x.id===id):null;let schema=schemas[k];document.getElementById('modal').innerHTML=`<h3>${old?'Edit':'Add'} ${schema.title.replace(/s$/,'')}</h3><form id="recordForm"><div class="formgrid">${schema.fields.map(f=>`<label class="${f==='name'?'wide':''}">${esc(f[0].toUpperCase()+f.slice(1))}${f==='status'?`<select name="${f}">${schema.statuses.map(s=>`<option ${old?.status===s?'selected':''}>${esc(s)}</option>`).join('')}</select>`:`<input name="${f}" ${f==='value'?'type="number" min="0" step="0.01"':f==='email'?'type="email"':'type="text"'} value="${esc(old?.[f]??(f==='owner'?'Admin':''))}" ${f==='name'?'required':''}>`}</label>`).join('')}</div><div class="actions">${old?`<button type="button" class="btn danger" onclick="deleteRecord('${k}','${id}')">Delete</button>`:''}<button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Record</button></div></form>`;document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();let values=Object.fromEntries(new FormData(e.target));if(k==='leads'||k==='deals')values.value=Number(values.value||0);if(old)Object.assign(old,values);else data.records[k].unshift({id:crypto.randomUUID(),businessId:business,...values});save();closeModal();render()};document.getElementById('modalbg').classList.add('show')}function deleteRecord(k,id){if(!confirm('Delete this demo record?'))return;data.records[k]=data.records[k].filter(x=>x.id!==id);save();closeModal();render()}function closeModal(){document.getElementById('modalbg').classList.remove('show')}document.getElementById('modalbg').addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal()});function clientManagement(){
+ const all=records('clients'),active=all.filter(x=>!x.inactive),inactive=all.filter(x=>x.inactive);
+ const viewRows=(items)=>`<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th><th></th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'Legacy record')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':x.status||'Active')}</td><td><label style="display:flex;align-items:center;gap:8px;white-space:nowrap"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${x.id}',this.checked)"> Make Inactive</label></td><td><button class="btn secondary" onclick="openClientIntake('${x.id}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
+ const tabs=[['active','Active Clients',active.length],['inactive','Inactive Clients',inactive.length],['contacts','Contacts',records('contacts').length]];
+ const tabbar=`<div class="toolbar" role="tablist" aria-label="Client directory views">${tabs.map(([id,label,n])=>`<button role="tab" aria-selected="${clientTab===id}" class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>`;
+ const body=clientTab==='contacts'?`<section class="panel"><div class="heading"><div><h3>Contacts</h3><p>People associated with your clients</p></div><button class="btn secondary" onclick="openRecord('contacts')">+ Add Contact</button></div>${table('contacts',records('contacts'))}</section>`:`<section class="panel"><h3>${clientTab==='inactive'?'Inactive / Archived Clients':'Active Clients'}</h3>${viewRows(clientTab==='inactive'?inactive:active)}</section>`;
+ return `<div class="heading"><div><h2>Clients</h2><p>Client intake, directory, and contacts in one place</p></div><button class="btn" onclick="openClientIntake()">+ New Client</button></div><div class="alert">Local demonstration only. Client numbers and checkbox changes are stored in this browser; they are not yet synchronized with the master client board. Do not enter confidential customer data until secure synchronization is enabled.</div>${tabbar}${body}`;
+}
+function generateDemoClientNumber(){let n;const used=new Set(data.records.clients.map(x=>x.clientNumber));do{n='BC-'+String(Math.floor(Math.random()*900000)+100000)}while(used.has(n));return n}
+function setClientInactive(id,checked){let x=data.records.clients.find(r=>r.id===id&&r.businessId===business);if(!x)return;x.inactive=checked;x.status=checked?'Inactive':'Active';save();render()}
+function openClientIntake(id){const x=id?data.records.clients.find(r=>r.id===id&&r.businessId===business):null;if(id&&!x)return;
+ const fields=[['name','Company / Client Name',true],['contactName','Primary Contact Name',true],['email','Contact Email',true],['phone','Phone Number',false],['customerType','Customer Type',false],['leadSource','Lead Source',false],['owner','Assigned Representative',false],['address','Business Address',false],['city','City',false],['state','State',false],['zip','ZIP Code',false],['notes','Notes',false]];
+ document.getElementById('modal').innerHTML=`<h3>${x?'Edit Client':'New Client Intake'}</h3><p class="notice">${x?'Client number: '+esc(x.clientNumber||'Legacy record'):'A demo client number will be generated when you save. Production numbers will be assigned securely by the backend.'}</p><form id="clientIntakeForm"><div class="formgrid">${fields.map(([key,label,required])=>`<label class="${key==='name'||key==='notes'?'wide':''}">${label}${key==='notes'?`<textarea name="${key}" rows="3">${esc(x?.[key]||'')}</textarea>`:key==='customerType'?`<select name="${key}">${['','Enterprise','SMB','Individual','Other'].map(v=>`<option value="${v}" ${x?.[key]===v?'selected':''}>${v||'Select type'}</option>`).join('')}</select>`:`<input name="${key}" ${key==='email'?'type="email"':'type="text"'} value="${esc(x?.[key]||'')}" ${required?'required':''}>`}</label>`).join('')}</div><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">${x?'Save Changes':'Create Client'}</button></div></form>`;
+ document.getElementById('clientIntakeForm').onsubmit=e=>{e.preventDefault();const vals=Object.fromEntries(new FormData(e.target));if(x){Object.assign(x,vals)}else{data.records.clients.unshift({id:crypto.randomUUID(),businessId:business,clientNumber:generateDemoClientNumber(),status:'Active',inactive:false,createdAt:new Date().toISOString(),...vals})}save();closeModal();render()};document.getElementById('modalbg').classList.add('show');
+}
+function connections(){return `<div class="heading"><div><h2>Data Connections</h2><p>Plan board mappings for ${esc(data.businesses.find(b=>b.id===business)?.name)}</p></div><button class="btn" onclick="openConnection()">+ Plan Connection</button></div><div class="alert">Connection settings are drafts only. Live validation and synchronization are not enabled.</div><section class="panel"><h3>Data Connection Status</h3><div class="line"><span>Connection</span><b>Blueprint Collective Database</b></div><div class="line"><span>Status</span>${badge('Not connected')}</div></section><section class="panel"><h3>Planned Board Connections</h3><div class="tablewrap"><table><thead><tr><th>Board label</th><th>Board ID</th><th>CRM Module</th><th>Mode</th><th></th></tr></thead><tbody>${data.connections.filter(x=>x.businessId===business).map(x=>`<tr><td>${esc(x.label)}</td><td>${esc(x.boardId||'Not assigned')}</td><td>${esc(x.module)}</td><td>${esc(x.mode)}</td><td><button class="btn secondary" onclick="removeConnection('${x.id}')">Remove</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">No connection plans yet</td></tr>'}</tbody></table></div></section>`}function openConnection(){document.getElementById('modal').innerHTML=`<h3>Plan a Data Connection</h3><p class="notice">This saves a local draft; it does not connect to a live database.</p><form id="connForm"><div class="formgrid"><label class="wide">Board label<input name="label" required placeholder="e.g. Blueprint Leads"></label><label>Board ID<input name="boardId" inputmode="numeric" placeholder="Optional"></label><label>CRM Module<select name="module">${Object.keys(schemas).map(k=>`<option value="${k}">${schemas[k].title}</option>`).join('')}</select></label><label>Synchronization<select name="mode"><option>Two-way (planned)</option><option>Read-only (planned)</option><option>Write-only (planned)</option></select></label></div><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn">Save Draft</button></div></form>`;document.getElementById('connForm').onsubmit=e=>{e.preventDefault();data.connections.push({id:crypto.randomUUID(),businessId:business,...Object.fromEntries(new FormData(e.target))});save();closeModal();render()};document.getElementById('modalbg').classList.add('show')}function removeConnection(id){if(confirm('Remove this local connection draft?')){data.connections=data.connections.filter(x=>x.id!==id);save();render()}}function settings(){
+ const tabs=`<div class="toolbar" role="tablist" aria-label="Settings sections"><button role="tab" aria-selected="${settingsTab==='businesses'}" class="btn ${settingsTab==='businesses'?'':'secondary'}" onclick="switchSettingsTab('businesses')">Business & Branding</button><button role="tab" aria-selected="${settingsTab==='connections'}" class="btn ${settingsTab==='connections'?'':'secondary'}" onclick="switchSettingsTab('connections')">Data Connections</button></div>`;
+ return `<div class="heading"><div><h2>Settings</h2><p>Manage your business and integrations</p></div></div>${tabs}${settingsTab==='connections'?connections():businessSettings()}`;
+}
+function businessSettings(){return `<div class="heading"><div><h2>Administration</h2><p>Manage business tenants and branding</p></div><button class="btn" onclick="openBusiness()">+ Add Business</button></div><div class="alert">Business isolation here is a UI demonstration only. Production requires authenticated users, database-level row security, and server-side permission checks.</div><section class="panel"><h3>Business Tenants</h3>${data.businesses.map(b=>`<div class="line" style="padding:12px;border-bottom:1px solid #eef2f6;align-items:center"><span style="display:flex;align-items:center;gap:10px"><span class="businessmark" style="background:${esc(b.color)};color:white">${esc(b.name[0])}</span><b>${esc(b.name)}</b></span><button class="btn secondary" onclick="editBusiness('${b.id}')">Branding</button></div>`).join('')}</section><section class="panel"><h3>Platform Configuration</h3><div class="line"><span>Application</span><b>Blueprint Collective</b></div><div class="line"><span>Data storage</span><b>Browser storage (demo)</b></div><div class="line"><span>Authentication</span>${badge('Not configured')}</div><div class="line"><span>Authentication &amp; Data Services</span>${badge('Not connected')}</div><div class="line"><span>Database Connection</span>${badge('Not connected')}</div><p class="notice">Sample data uses example.com email addresses. Do not enter confidential customer information into this prototype.</p><button class="btn danger" onclick="resetDemo()">Reset All Demo Data</button></section>`}function openBusiness(id){let b=id?data.businesses.find(x=>x.id===id):null;document.getElementById('modal').innerHTML=`<h3>${b?'Edit Business Branding':'Add Business Tenant'}</h3><form id="bizForm"><div class="formgrid"><label class="wide">Business name<input name="name" value="${esc(b?.name||'')}" required></label><label>Brand color<input type="color" name="color" value="${esc(b?.color||'#163b65')}"></label></div><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn">Save Business</button></div></form>`;document.getElementById('bizForm').onsubmit=e=>{e.preventDefault();let vals=Object.fromEntries(new FormData(e.target));if(b)Object.assign(b,vals);else{let id=crypto.randomUUID();data.businesses.push({id,...vals});business=id}save();closeModal();render()};document.getElementById('modalbg').classList.add('show')}function editBusiness(id){openBusiness(id)}function resetDemo(){if(confirm('Reset all browser-stored demo data and connection drafts?')){data=structuredClone(sample);business='blueprint';save();render()}}render();
+</script>
+<script>
+/* Blueprint CRM: authenticated Monday Clients integration.
+   Other CRM modules remain browser demos until their backends are connected. */
+const BC_URL='https://lbheezjanvalalinqxcd.supabase.co';
+const BC_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiaGVlemphbnZhbGFsaW5xeGNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1NjIwNDcsImV4cCI6MjEwNzEzODA0N30.lDap2OWhFi3udJQorDmtEKF-WhOt62I8ZLbENQRqaoM';
+const BC_FN=BC_URL+'/functions/v1/blueprint-clients';
+let bcSession=null,bcClients=[],bcLoading=false,bcError='',bcLoaded=false;
+function bcAuthHeaders(token){return {'apikey':BC_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'};}
+function bcGetSession(){try{return JSON.parse(sessionStorage.getItem('bc-session')||'null')}catch{return null}}
+function bcSetSession(session){bcSession=session;if(session)sessionStorage.setItem('bc-session',JSON.stringify(session));else sessionStorage.removeItem('bc-session')}
+async function bcRefreshSession(){
+  if(!bcSession?.refresh_token)return false;
+  const res=await fetch(BC_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':BC_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:bcSession.refresh_token})});
+  const json=await res.json();if(!res.ok){bcSetSession(null);return false}bcSetSession(json);return true;
+}
+async function bcCall(action,extra={}){
+  if(!bcSession?.access_token)throw Error('Please sign in.');
+  if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60){if(!await bcRefreshSession())throw Error('Session expired. Please sign in again.')}
+  const r=await fetch(BC_FN,{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify({action,...extra})});
+  const j=await r.json().catch(()=>({error:'Unexpected server response'}));
+  if(!r.ok)throw Error(j.error||'Request failed ('+r.status+')');
+  return j;
+}
+function bcCol(item,id){return (item.column_values||[]).find(c=>c.id===id)?.text||''}
+function bcConvert(item){
+  return {id:item.id,name:item.name,clientNumber:bcCol(item,'text_mm7zse5r'),
+  contactName:bcCol(item,'text_mm7zqy97'),email:bcCol(item,'email_mm7z1wtc'),
+  phone:bcCol(item,'phone_mm7z9nmt'),inactive:item.group?.id==='group_mm7zy877'||bcCol(item,'color_mm7zh53c')==='Inactive'};
+}
+async function bcLoad(){
+  if(!bcSession)return;
+  bcLoading=true;bcError='';render();
+  try{const response=await bcCall('list');bcClients=(response.items||[]).map(bcConvert);bcLoaded=true}
+  catch(e){bcError=e.message;bcLoaded=false}
+  finally{bcLoading=false;render()}
+}
+async function bcLogin(e){
+  e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type=submit]');
+  button.disabled=true;bcError='';try{
+    const email=form.elements.email.value.trim(),password=form.elements.password.value;
+    const r=await fetch(BC_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':BC_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    const json=await r.json();if(!r.ok)throw Error(json.error_description||json.msg||json.error||'Login failed');
+    bcSetSession(json);await bcLoad();
+  }catch(err){bcError=err.message;render()}finally{button.disabled=false}
+}
+function bcLogout(){bcSetSession(null);bcClients=[];bcLoaded=false;bcError='';render()}
+function bcClientRows(items){
+  return `<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'—')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':'Active')}</td><td><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${esc(x.id)}',this.checked)"> Make Inactive</label></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
+}
+clientManagement=function(){
+  if(!bcSession)return `<div class="heading"><div><h2>Clients</h2><p>Sign in to access the live client database.</p></div></div><section class="panel" style="max-width:460px"><h3>Employee sign in</h3>${bcError?`<p class="alert">${esc(bcError)}</p>`:''}<form onsubmit="bcLogin(event)"><div class="formgrid"><label class="wide">Email<input type="email" name="email" autocomplete="username" required></label><label class="wide">Password<input type="password" name="password" autocomplete="current-password" required></label></div><div class="actions"><button class="btn" type="submit">Sign In</button></div></form></section>`;
+  const active=bcClients.filter(x=>!x.inactive),inactive=bcClients.filter(x=>x.inactive);
+  const tabs=[['active','Active Clients',active.length],['inactive','Inactive Clients',inactive.length],['contacts','Contacts (demo)',records('contacts').length]];
+  const tabbar=`<div class="toolbar" role="tablist">${tabs.map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>`;
+  const body=clientTab==='contacts'?`<section class="panel"><h3>Contacts</h3><p class="notice">Contacts are currently a browser-only demonstration, not synced with Monday.com.</p>${table('contacts',records('contacts'))}</section>`:`<section class="panel"><h3>${clientTab==='inactive'?'Inactive Clients':'Active Clients'}</h3>${bcClientRows(clientTab==='inactive'?inactive:active)}</section>`;
+  return `<div class="heading"><div><h2>Clients</h2><p>Live MNTR+ Database client directory</p></div><div class="actions"><button class="btn secondary" onclick="bcLoad()">↻ Refresh</button><button class="btn secondary" onclick="bcLogout()">Sign Out</button><button class="btn" onclick="openClientIntake()">+ New Client</button></div></div>${bcError?`<div class="alert">${esc(bcError)}</div>`:''}${bcLoading?'<p class="notice">Loading live client records…</p>':''}${!bcLoaded?'<p class="notice">Live records have not loaded yet. Select Refresh.</p>':''}<p class="notice">Clients are managed through the MNTR+ Database. Other CRM modules are still demonstrations.</p>${tabbar}${body}`;
+};
+setClientInactive=async function(id,checked){
+  const item=bcClients.find(x=>x.id===id);if(!item)return;
+  try{await bcCall('inactive',{id,inactive:checked});await bcLoad()}
+  catch(e){bcError=e.message;render()}
+};
+openClientIntake=function(id){
+  if(!bcSession){bcError='Sign in first.';render();return}
+  if(id){alert('Editing existing clients will be enabled after the update endpoint is configured. Editing is not yet available in this screen.');return}
+  const fields=[['name','Company / Client Name',true],['contactName','Primary Contact Name',true],['email','Contact Email',true],['phone','Phone Number',false],['type','Customer Type',false],['source','Lead Source',false],['address','Business Address',false],['city','City',false],['state','State',false],['zip','ZIP Code',false],['notes','Notes',false]];
+  document.getElementById('modal').innerHTML=`<h3>New Client Intake</h3><p class="notice">This form creates a client record in the MNTR+ Database and assigns a permanent client number.</p><form id="clientIntakeForm"><div class="formgrid">${fields.map(([key,label,required])=>`<label class="${key==='name'||key==='notes'?'wide':''}">${label}${key==='notes'?`<textarea name="${key}" rows="3"></textarea>`:key==='type'?`<select name="type">${['','Enterprise','SMB','Individual','Other'].map(v=>`<option value="${v}">${v||'Select type'}</option>`).join('')}</select>`:`<input name="${key}" ${key==='email'?'type="email"':'type="text"'} ${required?'required':''}>`}</label>`).join('')}</div><p id="bcFormError" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Create Client in Database</button></div></form>`;
+  document.getElementById('clientIntakeForm').onsubmit=async e=>{
+    e.preventDefault();const button=e.target.querySelector('button[type=submit]'),err=document.getElementById('bcFormError');
+    button.disabled=true;err.textContent='Saving client to database…';
+    try{const vals=Object.fromEntries(new FormData(e.target));const result=await bcCall('create',vals);closeModal();await bcLoad();alert('Client created in database. Client number: '+result.clientNumber)}
+    catch(ex){err.textContent='Unable to save: '+ex.message}
+    finally{button.disabled=false}
+  };
+  document.getElementById('modalbg').classList.add('show');
+};
+bcSession=bcGetSession();
+if(bcSession){bcLoad()}
+</script>
+
+<script>
+/* Existing-client editing — secure MNTR+ Database integration */
+const bcOriginalConvert=bcConvert;
+bcConvert=function(item){
+  const x=bcOriginalConvert(item);
+  return {...x,phone:bcCol(item,'phone_mm7z9nmt'),
+    address:bcCol(item,'text_mm7zqck6'),city:bcCol(item,'text_mm7z97jd'),
+    state:bcCol(item,'text_mm7zrzk4'),zip:bcCol(item,'text_mm7zahv'),
+    type:bcCol(item,'dropdown_mm7ztz3y'),source:bcCol(item,'text_mm7z9jx6'),
+    notes:bcCol(item,'long_text_mm7zqqpy')};
+};
+bcClientRows=function(items){
+  return `<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th><th>Actions</th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'—')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':'Active')}</td><td><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${esc(x.id)}',this.checked)"> Make Inactive</label></td><td><button class="btn secondary" onclick="openClientIntake('${esc(x.id)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
+};
+openClientIntake=function(id){
+  if(!bcSession){bcError='Sign in first.';render();return}
+  const x=id?bcClients.find(c=>String(c.id)===String(id)):null;
+  if(id&&!x){bcError='Client not found. Refresh the directory and try again.';render();return}
+  const fields=[['name','Company / Client Name',true],['contactName','Primary Contact Name',true],['email','Contact Email',true],['phone','Phone Number',false],['type','Customer Type',false],['source','Lead Source',false],['address','Business Address',false],['city','City',false],['state','State',false],['zip','ZIP Code',false],['notes','Notes',false]];
+  document.getElementById('modal').innerHTML=`<h3>${x?'Edit Client':'New Client Intake'}</h3><p class="notice">${x?'Client number: '+esc(x.clientNumber||'—')+' (permanent)':'A permanent client number will be generated when saved.'}</p><form id="clientIntakeForm"><div class="formgrid">${fields.map(([key,label,required])=>`<label class="${key==='name'||key==='notes'?'wide':''}">${label}${key==='notes'?`<textarea name="${key}" rows="3">${esc(x?.[key]||'')}</textarea>`:key==='type'?`<select name="type">${['','Enterprise','SMB','Individual','Other'].map(v=>`<option value="${v}" ${x?.type===v?'selected':''}>${v||'Select type'}</option>`).join('')}</select>`:`<input name="${key}" ${key==='email'?'type="email"':'type="text"'} value="${esc(x?.[key]||'')}" ${required?'required':''}>`}</label>`).join('')}</div><p id="bcFormError" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">${x?'Save Client Changes':'Create Client in Database'}</button></div></form>`;
+  document.getElementById('clientIntakeForm').onsubmit=async e=>{
+    e.preventDefault();
+    const button=e.target.querySelector('button[type=submit]'),err=document.getElementById('bcFormError');
+    button.disabled=true;err.textContent=x?'Updating client…':'Saving client to database…';
+    try{
+      const vals=Object.fromEntries(new FormData(e.target));
+      const result=await bcCall(x?'update':'create',x?{id:x.id,...vals}:vals);
+      closeModal();await bcLoad();
+      if(bcError)alert('Saved, but refreshing the directory failed: '+bcError);
+      else alert(x?'Client changes saved to database. Client number: '+result.clientNumber:'Client created in database. Client number: '+result.clientNumber);
+    }catch(ex){err.textContent='Unable to save: '+ex.message}
+    finally{button.disabled=false}
+  };
+  document.getElementById('modalbg').classList.add('show');
+};
+</script>
+
+<script>
+/* Client directory search, filtering and sorting.
+   Searches the live client list returned by the authenticated backend. */
+let bcSearch='',bcTypeFilter='all',bcRepFilter='all',bcSort='name-asc';
+const bcBeforeFiltersConvert=bcConvert;
+bcConvert=function(item){
+ const x=bcBeforeFiltersConvert(item);
+ return {...x,representative:bcCol(item,'multiple_person_mm7zrbtx'),
+   createdAt:bcCol(item,'date_mm7z5c7y')};
+};
+function bcSearchChange(v){bcSearch=v;bcRenderClientResults()}
+function bcFilterChange(key,v){
+ if(key==='type')bcTypeFilter=v;
+ if(key==='rep')bcRepFilter=v;
+ if(key==='sort')bcSort=v;
+ bcRenderClientResults();
+}
+function bcClearFilters(){
+ bcSearch='';bcTypeFilter='all';bcRepFilter='all';bcSort='name-asc';render();
+}
+function bcFilteredClients(){
+ const q=bcSearch.trim().toLocaleLowerCase();
+ const current=clientTab==='inactive'?bcClients.filter(x=>x.inactive):bcClients.filter(x=>!x.inactive);
+ const filtered=current.filter(x=>{
+  const searchable=[x.name,x.clientNumber,x.contactName,x.email,x.phone,x.address,x.city,x.state,x.zip].map(v=>String(v||'').toLocaleLowerCase());
+  const matchesSearch=!q||searchable.some(v=>v.includes(q));
+  const matchesType=bcTypeFilter==='all'||String(x.type||'').split(',').map(v=>v.trim()).includes(bcTypeFilter);
+  const matchesRep=bcRepFilter==='all'||(bcRepFilter==='unassigned'?!x.representative:x.representative===bcRepFilter);
+  return matchesSearch&&matchesType&&matchesRep;
+ });
+ const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
+ filtered.sort((a,b)=>{
+  if(bcSort==='name-desc')return collator.compare(b.name||'',a.name||'');
+  if(bcSort==='newest')return (b.createdAt||'').localeCompare(a.createdAt||'')||collator.compare(a.name||'',b.name||'');
+  if(bcSort==='oldest')return (a.createdAt||'').localeCompare(b.createdAt||'')||collator.compare(a.name||'',b.name||'');
+  if(bcSort==='number')return collator.compare(a.clientNumber||'',b.clientNumber||'');
+  return collator.compare(a.name||'',b.name||'');
+ });
+ return filtered;
+}
+function bcRenderClientResults(){
+ const target=document.getElementById('bcFilteredResults');
+ if(!target)return render();
+ const rows=bcFilteredClients();
+ target.innerHTML=`<p class="notice">Showing ${rows.length} of ${clientTab==='inactive'?bcClients.filter(x=>x.inactive).length:bcClients.filter(x=>!x.inactive).length} clients</p>${bcClientRows(rows)}`;
+}
+const bcClientManagementBeforeFilters=clientManagement;
+clientManagement=function(){
+ if(!bcSession||clientTab==='contacts')return bcClientManagementBeforeFilters();
+ const active=bcClients.filter(x=>!x.inactive),inactive=bcClients.filter(x=>x.inactive);
+ const tabs=[['active','Active Clients',active.length],['inactive','Inactive Clients',inactive.length],['contacts','Contacts (demo)',records('contacts').length]];
+ const options=(values,current)=>values.map(([v,label])=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(label)}</option>`).join('');
+ const reps=[...new Set(bcClients.map(x=>x.representative).filter(Boolean))].sort();
+ const repOptions=[['all','All representatives'],['unassigned','Unassigned'],...reps.map(x=>[x,x])];
+ const typeOptions=[['all','All customer types'],...['Enterprise','SMB','Individual','Other'].map(x=>[x,x])];
+ const sortOptions=[['name-asc','Company A–Z'],['name-desc','Company Z–A'],['newest','Newest first'],['oldest','Oldest first'],['number','Client number']];
+ return `<div class="heading"><div><h2>Clients</h2><p>Live MNTR+ Database client directory</p></div><div class="actions"><button class="btn secondary" onclick="bcLoad()">↻ Refresh</button><button class="btn secondary" onclick="bcLogout()">Sign Out</button><button class="btn" onclick="openClientIntake()">+ New Client</button></div></div>
+ ${bcError?`<div class="alert">${esc(bcError)}</div>`:''}
+ ${bcLoading?'<p class="notice">Loading live client records…</p>':''}
+ ${!bcLoaded?'<p class="notice">Live records have not loaded yet. Select Refresh.</p>':''}
+ <p class="notice">Clients are managed through the MNTR+ Database. Other CRM modules are still demonstrations.</p>
+ <div class="toolbar" role="tablist">${tabs.map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>
+ <section class="panel">
+ <div class="heading"><div><h3>${clientTab==='inactive'?'Inactive Clients':'Active Clients'}</h3><p>Search and filter your client records</p></div></div>
+ <div class="formgrid" style="margin-bottom:14px">
+ <label class="wide">Search clients<input id="bcClientSearch" type="search" placeholder="Company, client number, contact, email, phone, address…" value="${esc(bcSearch)}" oninput="bcSearchChange(this.value)"></label>
+ <label>Customer type<select onchange="bcFilterChange('type',this.value)">${options(typeOptions,bcTypeFilter)}</select></label>
+ <label>Assigned representative<select onchange="bcFilterChange('rep',this.value)">${options(repOptions,bcRepFilter)}</select></label>
+ <label>Sort by<select onchange="bcFilterChange('sort',this.value)">${options(sortOptions,bcSort)}</select></label>
+ </div>
+ <div style="margin-bottom:12px"><button class="btn secondary" onclick="bcClearFilters()">Clear Filters</button></div>
+ <div id="bcFilteredResults"><p class="notice">Showing ${bcFilteredClients().length} of ${clientTab==='inactive'?inactive.length:active.length} clients</p>${bcClientRows(bcFilteredClients())}</div>
+ </section>`;
+};
+</script>
+
+<script>
+/* Live contact directory, linked to verified client records */
+let bcContacts=[],bcContactsLoaded=false,bcContactsLoading=false,bcContactsError='';
+const bcBaseLoad=bcLoad;
+bcLoad=async function(){
+ await bcBaseLoad();
+ if(bcSession)await bcLoadContacts();
+};
+function bcContactCol(item,id){return(item.column_values||[]).find(x=>x.id===id)?.text||''}
+function bcContactValue(item,id){const c=(item.column_values||[]).find(x=>x.id===id);try{return JSON.parse(c?.value||'null')}catch{return null}}
+function bcContactConvert(item){return{id:String(item.id),name:item.name,
+ clientNumber:bcContactCol(item,'text_mm7zy7k0'),clientId:bcContactCol(item,'text_mm7z5k5x'),
+ company:bcContactCol(item,'text_mm7zbtdm'),title:bcContactCol(item,'text_mm7zwtx2'),
+ email:bcContactCol(item,'email_mm7zfbk8'),phone:bcContactCol(item,'phone_mm7zyfzm'),
+ primary:bcContactValue(item,'boolean_mm7zkts3')?.checked===true||bcContactCol(item,'boolean_mm7zkts3').toLowerCase()==='v',
+ notes:bcContactCol(item,'long_text_mm7z8r9c')}}
+async function bcLoadContacts(){
+ if(!bcSession)return;
+ bcContactsLoading=true;bcContactsError='';render();
+ try{const d=await bcCall('contacts_list');bcContacts=(d.items||[]).map(bcContactConvert);bcContactsLoaded=true}
+ catch(e){bcContactsError=e.message;bcContactsLoaded=false}
+ finally{bcContactsLoading=false;render()}
+}
+function bcContactsView(){
+ const rows=bcContacts.slice().sort((a,b)=>a.name.localeCompare(b.name));
+ return `<div class="heading"><div><h2>Clients</h2><p>Live MNTR+ Database contact directory</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadContacts()">↻ Refresh</button><button class="btn" onclick="bcOpenContact()">+ Add Contact</button></div></div>
+ <div class="toolbar">${[['active','Active Clients',bcClients.filter(x=>!x.inactive).length],['inactive','Inactive Clients',bcClients.filter(x=>x.inactive).length],['contacts','Contacts',bcContacts.length]].map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>
+ ${bcContactsError?`<div class="alert">${esc(bcContactsError)}</div>`:''}
+ ${bcContactsLoading?'<p class="notice">Loading contacts…</p>':''}
+ <section class="panel"><div class="heading"><div><h3>Contacts</h3><p>People linked to your client records</p></div></div>
+ <div class="tablewrap"><table><thead><tr><th>Name</th><th>Company</th><th>Client Number</th><th>Job Title</th><th>Email</th><th>Phone</th><th>Primary</th><th></th></tr></thead><tbody>
+ ${rows.length?rows.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.company)}</td><td>${esc(c.clientNumber)}</td><td>${esc(c.title)}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${c.primary?'Yes':'—'}</td><td><button class="btn secondary" onclick="bcOpenContact('${esc(c.id)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No contacts have been added yet.</td></tr>'}
+ </tbody></table></div></section>`;
+}
+function bcOpenContact(id){
+ const c=id?bcContacts.find(x=>x.id===String(id)):null;
+ if(id&&!c){alert('Contact not found. Refresh and try again.');return}
+ if(!bcClients.length){alert('Create a client first, then add its contacts.');return}
+ const opts=bcClients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<option value="${esc(x.id)}" ${String(c?.clientId||'')===String(x.id)?'selected':''}>${esc(x.name)} (${esc(x.clientNumber)})</option>`).join('');
+ document.getElementById('modal').innerHTML=`<h3>${c?'Edit Contact':'Add Contact'}</h3><p class="notice">Contacts are linked to the selected client in the MNTR+ Database.</p><form id="bcContactForm"><div class="formgrid">
+ <label class="wide">Client / Company<select name="clientId" required><option value="">Select client</option>${opts}</select></label>
+ ${[['name','Contact Name',true],['title','Job Title',false],['email','Email',false],['phone','Phone',false]].map(([key,label,req])=>`<label>${label}<input name="${key}" ${key==='email'?'type="email"':''} value="${esc(c?.[key]||'')}" ${req?'required':''}></label>`).join('')}
+ <label class="wide" style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="primary" ${c?.primary?'checked':''}> Primary Contact</label>
+ <label class="wide">Notes<textarea name="notes" rows="3">${esc(c?.notes||'')}</textarea></label>
+ </div><p id="bcContactError" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">${c?'Save Contact Changes':'Create Contact in Database'}</button></div></form>`;
+ document.getElementById('bcContactForm').onsubmit=async e=>{
+ e.preventDefault();const btn=e.target.querySelector('button[type=submit]'),msg=document.getElementById('bcContactError');btn.disabled=true;msg.textContent='Saving contact…';
+ try{const vals=Object.fromEntries(new FormData(e.target));vals.primary=e.target.elements.primary.checked;
+ await bcCall(c?'contacts_update':'contacts_create',c?{id:c.id,...vals}:vals);
+ closeModal();await bcLoadContacts();if(bcContactsError)alert('Saved, but refreshing contacts failed: '+bcContactsError);
+ }catch(err){msg.textContent='Unable to save: '+err.message}
+ finally{btn.disabled=false}
+ };
+ document.getElementById('modalbg').classList.add('show');
+}
+const bcContactsOriginalManagement=clientManagement;
+clientManagement=function(){if(bcSession&&clientTab==='contacts')return bcContactsView();return bcContactsOriginalManagement()};
+if(bcSession)bcLoadContacts();
+</script>
+
+<script>
+let bcLeads=[],bcLeadsError='',bcLeadsLoading=false,bcLeadSearch='',bcLeadStatus='All';
+const bcLeadStatuses=['New','Contacted','Qualified','Proposal Sent','Won','Lost'];
+function bcLeadCol(item,id){return(item.column_values||[]).find(c=>c.id===id)?.text||''}
+function bcLeadConvert(x){return{id:String(x.id),name:x.name,contact:bcLeadCol(x,'text_mm7z6xwp'),email:bcLeadCol(x,'email_mm7zqcz7'),phone:bcLeadCol(x,'phone_mm7zytyq'),status:bcLeadCol(x,'color_mm7zqvy7')||'New',source:bcLeadCol(x,'text_mm7z89gz'),type:bcLeadCol(x,'text_mm7z4y0h'),rep:bcLeadCol(x,'text_mm7z6nvy'),follow:bcLeadCol(x,'date_mm7z4fz0'),value:bcLeadCol(x,'numeric_mm7znksy'),notes:bcLeadCol(x,'long_text_mm7zrbr1')}}
+async function bcLoadLeads(){if(!bcSession)return;bcLeadsLoading=true;bcLeadsError='';render();try{const d=await bcCall('leads_list');bcLeads=(d.items||[]).map(bcLeadConvert)}catch(e){bcLeadsError=e.message}finally{bcLeadsLoading=false;render()}}
+const bcLeadConvertOriginal=bcLeadConvert;
+bcLeadConvert=function(x){const v=bcLeadConvertOriginal(x);v.converted=bcLeadCol(x,'text_mm7zn3q7');return v};
+async function bcConvertLead(id){
+ const lead=bcLeads.find(x=>x.id===String(id));
+ if(!lead)return alert('Lead not found. Refresh and try again.');
+ if(lead.converted)return alert('Already converted to '+lead.converted);
+ if(!confirm('Convert '+lead.name+' into an ACTIVE CLIENT? This creates a permanent BC client number and marks the lead Won.'))return;
+ try{const r=await bcCall('lead_convert',{id:lead.id});alert('Client created: '+r.clientNumber+(r.contactWarning?'\n'+r.contactWarning:''));await bcLoadLeads();await bcLoad();await bcLoadContacts()}
+ catch(e){alert('Conversion error: '+e.message+'\nRefresh before attempting anything further.')}
+}
+function bcLeadRows(){const q=bcLeadSearch.trim().toLowerCase();return bcLeads.filter(x=>(bcLeadStatus==='All'||x.status===bcLeadStatus)&&(!q||[x.name,x.contact,x.email,x.phone,x.rep,x.source].some(v=>String(v||'').toLowerCase().includes(q)))).sort((a,b)=>a.name.localeCompare(b.name))}
+function bcLeadTable(){const rows=bcLeadRows();return '<p class="notice">Showing '+rows.length+' of '+bcLeads.length+' leads</p><div class="tablewrap"><table><thead><tr><th>Company / Lead</th><th>Contact</th><th>Email</th><th>Status</th><th>Representative</th><th>Follow-up</th><th>Est. Value</th><th>Actions</th></tr></thead><tbody>'+(rows.length?rows.map(x=>'<tr><td><b>'+esc(x.name)+'</b></td><td>'+esc(x.contact)+'</td><td>'+esc(x.email)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.rep)+'</td><td>'+esc(x.follow)+'</td><td>'+esc(x.value)+'</td><td><button class="btn secondary" onclick="bcOpenLead(\''+esc(x.id)+'\')">Edit</button> '+(x.converted?'<span class="notice">Converted: '+esc(x.converted)+'</span>':'<button class="btn" onclick="bcConvertLead(\''+esc(x.id)+'\')">Convert to Client</button>')+'</td></tr>').join(''):'<tr><td colspan="8">No leads match these filters.</td></tr>')+'</tbody></table></div>'}
+function bcLeadsView(){return '<div class="heading"><div><h2>Leads</h2><p>Live MNTR+ Database lead pipeline</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadLeads()">↻ Refresh</button><button class="btn" onclick="bcOpenLead()">+ New Lead</button></div></div>'+(bcLeadsError?'<div class="alert">'+esc(bcLeadsError)+'</div>':'')+(bcLeadsLoading?'<p class="notice">Loading leads…</p>':'')+'<section class="panel"><div class="formgrid"><label class="wide">Search leads<input type="search" placeholder="Company, contact, email, representative…" value="'+esc(bcLeadSearch)+'" oninput="bcLeadSearch=this.value;bcLeadRefreshRows()"></label><label>Lead Status<select onchange="bcLeadStatus=this.value;bcLeadRefreshRows()">'+['All',...bcLeadStatuses].map(x=>'<option '+(bcLeadStatus===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label></div><div id="bcLeadTable">'+bcLeadTable()+'</div></section>'}
+function bcLeadRefreshRows(){const el=document.getElementById('bcLeadTable');if(el)el.innerHTML=bcLeadTable()}
+function bcOpenLead(id){
+ const x=id?bcLeads.find(l=>l.id===String(id)):null;if(id&&!x)return alert('Lead not found. Refresh and try again.');
+ const fields=[['name','Company / Lead Name','text'],['contact','Contact Name','text'],['email','Email','email'],['phone','Phone','tel'],['source','Lead Source','text'],['type','Customer Type','text'],['rep','Assigned Representative','text'],['follow','Next Follow-Up','date'],['value','Estimated Value','number']];
+ const inputs=fields.map(([k,label,type])=>'<label>'+label+'<input name="'+k+'" type="'+type+'" '+(k==='name'?'required ':'')+(k==='value'?'min="0" step="0.01" ':'')+'value="'+esc(x?.[k]||'')+'"></label>').join('');
+ document.getElementById('modal').innerHTML='<h3>'+(x?'Edit Lead':'New Lead')+'</h3><p class="notice">Lead records are saved to the live MNTR+ Database.</p><form id="bcLeadForm"><div class="formgrid">'+inputs+'<label>Lead Status<select name="status">'+bcLeadStatuses.map(v=>'<option '+((x?.status||'New')===v?'selected':'')+'>'+v+'</option>').join('')+'</select></label><label class="wide">Notes<textarea name="notes" rows="3">'+esc(x?.notes||'')+'</textarea></label></div><p id="bcLeadFormError" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">'+(x?'Save Lead Changes':'Create Lead in Database')+'</button></div></form>';
+ document.getElementById('bcLeadForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcLeadFormError');btn.disabled=true;msg.textContent='Saving lead…';try{const v=Object.fromEntries(new FormData(e.target));await bcCall(x?'leads_update':'leads_create',x?{id:x.id,...v}:v);closeModal();await bcLoadLeads()}catch(err){msg.textContent='Unable to save: '+err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+const bcOriginalRender=render;
+render=function(){bcOriginalRender();if(page==='leads'&&bcSession)document.getElementById('view').innerHTML=bcLeadsView()};
+const bcOriginalNavigate=navigate;
+navigate=function(p){bcOriginalNavigate(p);if(p==='leads'&&bcSession)bcLoadLeads()};
+if(bcSession&&page==='leads')bcLoadLeads();
+</script>
+
+<script>
+/* Blueprint Collective — Live Sales Pipeline */
+navs.find(n=>n[0]==='deals')[2]='Sales Pipeline';
+let bcSales=[],bcSalesLoading=false,bcSalesError='',bcSalesSelected=null,bcSalesQuotes=[],bcJobs=[];
+const bcStages=['Inquiry','Qualifying','Preparing Quote','Quote Sent','Negotiation','Won','Lost'];
+const bcQuoteStatuses=['Draft','Sent','Under Review','Revision Requested','Approved','Declined'];
+const bcSalesMoney=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));
+const bcSalesDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+async function bcLoadSales(){
+ if(!bcSession)return;
+ bcSalesLoading=true;bcSalesError='';render();
+ try{const r=await bcCall('sales_list');bcSales=r.items||[]}
+ catch(e){bcSalesError=e.message}
+ finally{bcSalesLoading=false;render()}
+}
+function bcSalesView(){
+ if(bcSalesSelected){const o=bcSales.find(x=>x.id===bcSalesSelected);if(!o){bcSalesSelected=null;return bcSalesView()}return bcSalesDetail(o)}
+ const open=bcSales.filter(x=>!['Won','Lost'].includes(x.stage)),value=open.reduce((n,x)=>n+Number(x.estimated_value||0),0);
+ return `<div class="heading"><div><h2>Sales Pipeline</h2><p>Track opportunities, customer quotes, revisions and follow-ups.</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadSales()">↻ Refresh</button><button class="btn" onclick="bcSalesEdit()">+ New Opportunity</button></div></div>
+ ${bcSalesError?'<div class="alert">'+esc(bcSalesError)+'</div>':''}
+ <div class="cards"><div class="card"><div class="label">Open Opportunities</div><div class="value">${open.length}</div></div><div class="card"><div class="label">Potential Revenue</div><div class="value">${bcSalesMoney(value)}</div></div><div class="card"><div class="label">Quotes Sent</div><div class="value">${bcSales.filter(x=>x.stage==='Quote Sent').length}</div></div><div class="card"><div class="label">Won Opportunities</div><div class="value">${bcSales.filter(x=>x.stage==='Won').length}</div></div></div>
+ <section class="panel"><h3>Opportunities</h3>${bcSalesLoading?'<p>Loading…</p>':''}<div class="tablewrap"><table><thead><tr><th>Opportunity</th><th>Client</th><th>Stage</th><th>Value</th><th>Follow-Up</th><th></th></tr></thead><tbody>${bcSales.length?bcSales.map(o=>`<tr><td><b>${esc(o.title)}</b></td><td>${esc(o.client_name||'—')}</td><td>${esc(o.stage)}</td><td>${bcSalesMoney(o.estimated_value)}</td><td>${bcSalesDate(o.next_follow_up)}</td><td><button class="btn secondary" onclick="bcSalesOpen('${o.id}')">View</button></td></tr>`).join(''):'<tr><td colspan="6">No opportunities yet. Create the first one to get started.</td></tr>'}</tbody></table></div></section>`;
+}
+function bcSalesDetail(o){
+ const quotes=bcSalesQuotes;
+ return `<div class="heading"><div><button class="btn secondary" onclick="bcSalesSelected=null;render()">← All Opportunities</button><h2 style="margin-top:14px">${esc(o.title)}</h2><p>${esc(o.client_name||'Unassigned client')} · ${esc(o.representative||'No representative')}</p></div><div class="actions"><button class="btn secondary" onclick="bcSalesEdit('${o.id}')">Edit Opportunity</button><button class="btn" onclick="bcConvertToJob('${o.id}')" ${!quotes.some(q=>q.status==='Approved')?'disabled title="Approve a quote first"':''}>Convert to Job</button></div></div>
+ <div class="cards"><div class="card"><div class="label">Opportunity Value</div><div class="value">${bcSalesMoney(o.estimated_value)}</div></div><div class="card"><div class="label">Current Stage</div><div class="value" style="font-size:22px">${esc(o.stage)}</div></div><div class="card"><div class="label">Expected Close</div><div class="value" style="font-size:22px">${bcSalesDate(o.expected_close)}</div></div><div class="card"><div class="label">Quote Versions</div><div class="value">${quotes.length}</div></div></div>
+ <section class="panel" style="margin-bottom:20px"><h3>Sales Progress</h3><div style="display:flex;gap:5px;flex-wrap:wrap">${bcStages.map(x=>`<span style="padding:10px;border-radius:6px;background:${o.stage===x?'#244f84':'#e9edf3'};color:${o.stage===x?'white':'#263a55'};font-size:12px">${esc(x)}</span>`).join('')}</div><p class="notice">Next follow-up: ${bcSalesDate(o.next_follow_up)}</p></section>
+ <div class="twocol"><section class="panel"><div class="heading"><div><h3>Documents & Quotes</h3><p>Secure document history and revisions</p></div><button class="btn" onclick="bcSalesUpload()">+ Upload Quote</button></div>
+ ${quotes.length?quotes.map(q=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 0;border-bottom:1px solid #e4eaf1"><div><b>${esc(q.file_name)}</b><div class="notice">Version ${q.version_number} · ${bcSalesMoney(q.quoted_amount)} · ${bcSalesDate(q.date_sent)} · ${esc(q.status)}</div></div><div class="actions"><button class="btn secondary" onclick="bcSalesDownload('${q.id}')">Open</button>${q.status!=='Approved'&&o.stage!=='Won'?`<button class="btn" onclick="bcApproveQuote('${q.id}')">Approve</button>`:''}</div></div>`).join(''):'<p class="notice">No quotes uploaded yet.</p>'}
+ </section><section class="panel"><h3>Opportunity Information</h3><div class="formgrid"><div><div class="notice">Client</div><b>${esc(o.client_name||'—')}</b></div><div><div class="notice">Contact</div><b>${esc(o.contact_name||'—')}</b></div><div><div class="notice">Representative</div><b>${esc(o.representative||'—')}</b></div><div><div class="notice">Source</div><b>${esc(o.source||'—')}</b></div><div><div class="notice">Next Follow-Up</div><b>${bcSalesDate(o.next_follow_up)}</b></div><div><div class="notice">Stage</div><b>${esc(o.stage)}</b></div></div><h3>Notes</h3><p>${esc(o.notes||'No notes yet.')}</p></section></div>`;
+}
+async function bcSalesOpen(id){bcSalesSelected=id;bcSalesQuotes=[];render();try{const r=await bcCall('sales_quotes',{opportunityId:id});bcSalesQuotes=r.items||[];render()}catch(e){alert('Unable to load quotes: '+e.message)}}
+function bcSalesEdit(id){
+ const o=id?bcSales.find(x=>x.id===id):null;
+ const f=(name,label,type='text')=>`<label>${label}<input name="${name}" type="${type}" ${name==='title'?'required':''} ${type==='number'?'min="0" step="0.01"':''} value="${esc(o?.[name]||'')}"></label>`;
+ const clientOptions='<option value="">No linked client</option>'+bcClients.filter(c=>!c.inactive).map(c=>`<option value="${esc(c.id)}" ${o?.client_item_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+ document.getElementById('modal').innerHTML=`<h3>${o?'Edit':'New'} Opportunity</h3><form id="bcSalesForm"><div class="formgrid">${f('title','Opportunity Name')}<label>Linked Client<select name="client_item_id" id="bcSalesClient">${clientOptions}</select></label><label>Client Contact<select name="contact_name" id="bcSalesContact"><option value="">Select a linked client first</option></select></label>${f('representative','Assigned Representative')}${f('source','Lead Source')}${f('estimated_value','Estimated Value','number')}${f('expected_close','Expected Close Date','date')}${f('next_follow_up','Next Follow-Up','date')}<label>Sales Stage<select name="stage">${bcStages.map(v=>`<option ${o?.stage===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(o?.notes||'')}</textarea></label></div><p id="bcSalesMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Opportunity</button></div></form>`;
+ const form=document.getElementById('bcSalesForm');
+ const clientSelect=form.elements.client_item_id,contactSelect=form.elements.contact_name;
+ const populateClient=()=>{
+   const client=bcClients.find(c=>String(c.id)===String(clientSelect.value));
+   const matches=client?bcContacts.filter(c=>String(c.clientId)===String(client.id)||Boolean(client.clientNumber&&c.clientNumber===client.clientNumber)):[];
+   contactSelect.innerHTML='<option value="">'+(client?'Select contact (optional)':'Select a linked client first')+'</option>'+matches.map(c=>'<option value="'+esc(c.name)+'">'+esc(c.name)+(c.primary?' — Primary':'')+'</option>').join('');
+   const preferred=matches.find(c=>c.primary)||matches[0];
+   if(preferred)contactSelect.value=preferred.name;
+   if(client){
+     const notice=document.getElementById('bcSalesMsg');
+     notice.textContent='Linked to '+client.name+(client.clientNumber?' ('+client.clientNumber+')':'')+(preferred?' · Contact: '+preferred.name:' · No saved contacts found');
+   }else document.getElementById('bcSalesMsg').textContent='';
+ };
+ clientSelect.addEventListener('change',populateClient);
+ populateClient();
+ if(o?.contact_name){
+   if(!Array.from(contactSelect.options).some(x=>x.value===o.contact_name))contactSelect.add(new Option(o.contact_name,o.contact_name));
+   contactSelect.value=o.contact_name;
+ }
+ document.getElementById('bcSalesForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcSalesMsg');btn.disabled=true;msg.textContent='Saving…';try{const v=Object.fromEntries(new FormData(e.target));const client=bcClients.find(c=>c.id===v.client_item_id);v.client_name=client?.name||'';v.client_number=client?.clientNumber||'';if(o)v.id=o.id;const r=await bcCall('sales_save',v);closeModal();await bcLoadSales();if(o)bcSalesSelected=o.id;else bcSalesSelected=r.item.id;await bcSalesOpen(bcSalesSelected);if(v.stage==='Quote Sent')bcSalesUpload()}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+function bcSalesUpload(){
+ if(!bcSalesSelected)return;
+ document.getElementById('modal').innerHTML=`<h3>Upload Quote</h3><p class="notice">Files are stored privately and linked to this opportunity. Maximum 15 MB.</p><form id="bcQuoteForm"><div class="formgrid"><label class="wide">Quote File<input type="file" name="file" accept=".pdf,.doc,.docx,.xls,.xlsx" required></label><label>Quote Amount ($)<input name="quoted_amount" type="number" min="0" step="0.01" required></label><label>Quote Status<select name="status">${bcQuoteStatuses.map(x=>`<option>${x}</option>`).join('')}</select></label><label>Date Sent<input name="date_sent" type="date"></label><label class="wide">Revision Notes<textarea name="notes" rows="3"></textarea></label></div><p class="notice" id="bcQuoteMsg"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Upload Quote</button></div></form>`;
+ document.getElementById('bcQuoteForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcQuoteMsg'),file=e.target.elements.file.files[0];if(!file)return;if(file.size>15*1024*1024){msg.textContent='Maximum file size is 15 MB';return}btn.disabled=true;msg.textContent='Uploading securely…';try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file)});const v=Object.fromEntries(new FormData(e.target));delete v.file;await bcCall('sales_upload',{...v,opportunityId:bcSalesSelected,fileName:file.name,mime:file.type,base64:data});closeModal();await bcSalesOpen(bcSalesSelected)}catch(err){msg.textContent='Upload failed: '+err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+async function bcSalesDownload(quoteId){try{const r=await bcCall('sales_quote_url',{quoteId});window.open(r.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open quote: '+e.message)}}
+
+async function bcApproveQuote(quoteId){
+ if(!confirm('Confirm this quote has been approved by the customer? This does not create a job yet.'))return;
+ try{await bcCall('sales_quote_approve',{quoteId});await bcSalesOpen(bcSalesSelected)}
+ catch(e){alert('Unable to approve quote: '+e.message)}
+}
+async function bcConvertToJob(id){
+ const approved=bcSalesQuotes.filter(q=>q.status==='Approved').sort((a,b)=>b.version_number-a.version_number)[0];
+ if(!approved){alert('Approve a quote before converting this opportunity into a job.');return}
+ if(!confirm('Create a new job from approved quote version '+approved.version_number+' ('+bcSalesMoney(approved.quoted_amount)+')? This will mark the opportunity Won.'))return;
+ try{
+  const r=await bcCall('sales_convert_job',{opportunityId:id});
+  await bcLoadSales();
+  await bcSalesOpen(id);
+  alert((r.alreadyConverted?'This opportunity already has a job.':'Job created successfully.')+(r.warning?'\n'+r.warning:'')+'\nView it under Jobs & Projects.');
+ }catch(e){alert('Unable to convert to job: '+e.message)}
+}
+async function bcLoadJobs(){
+ if(!bcSession)return;
+ try{const r=await bcCall('sales_jobs_list');bcJobs=r.items||[];render()}catch(e){alert('Unable to load jobs: '+e.message)}
+}
+
+let bcJobSelected=null,bcJobTasks=[],bcJobActivity=[],bcJobDocs=[],bcApprovalSettings={clientMode:'both',override:null,effective:'both'},bcProofReviews=[];
+const bcJobStatuses=['New','Planning','In Progress','Awaiting Approval','On Hold','Completed','Cancelled'];
+const bcJobTypes=['General Project','Production / Fulfillment','Creative / Design','Professional Services','Media / Content','Internal Project','Customer Order'];
+const bcJobPriorities=['Low','Normal','High','Urgent'];
+async function bcJobOpen(id){
+ bcJobSelected=id;bcJobTasks=[];bcJobActivity=[];bcJobDocs=[];bcProofReviews=[];render();
+ try{const r=await bcCall('job_details',{jobId:id});bcJobTasks=r.tasks||[];bcJobActivity=r.activity||[];bcJobDocs=r.documents||[];render()}
+ catch(e){alert('Unable to load job details: '+e.message)}
+}
+function bcJobsView(){
+ if(bcJobSelected){const j=bcJobs.find(x=>x.id===bcJobSelected);if(j)return bcJobDetail(j);bcJobSelected=null}
+ const active=bcJobs.filter(j=>!['Completed','Cancelled'].includes(j.job_status));
+ return `<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage production, services, creative projects, customer orders, and internal work.</p></div><button class="btn secondary" onclick="bcLoadJobs()">↻ Refresh</button></div>
+ <div class="cards"><div class="card"><div class="label">Total Jobs</div><div class="value">${bcJobs.length}</div></div><div class="card"><div class="label">Active Jobs</div><div class="value">${active.length}</div></div><div class="card"><div class="label">In Progress</div><div class="value">${bcJobs.filter(j=>j.job_status==='In Progress').length}</div></div><div class="card"><div class="label">Completed</div><div class="value">${bcJobs.filter(j=>j.job_status==='Completed').length}</div></div></div>
+ <section class="panel"><h3>Job Directory</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Type</th><th>Status</th><th>Due Date</th><th>Value</th><th></th></tr></thead><tbody>${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${esc(j.job_type||'General Project')}</td><td>${esc(j.job_status)}</td><td>${bcSalesDate(j.due_date)}</td><td>${bcSalesMoney(j.approved_amount)}</td><td><button class="btn secondary" onclick="bcJobOpen('${j.id}')">Open Job</button></td></tr>`).join(''):'<tr><td colspan="7">No jobs yet. Convert an approved opportunity from Sales Pipeline.</td></tr>'}</tbody></table></div></section>`;
+}
+function bcJobDetail(j){
+ const complete=bcJobTasks.filter(t=>t.status==='Completed').length;
+ return `<div class="heading"><div><button class="btn secondary" onclick="bcJobSelected=null;render()">← All Jobs</button><h2 style="margin-top:12px">${esc(j.title)}</h2><p>${esc(j.client_name||'—')} · ${esc(j.client_number||'—')} · ${esc(j.contact_name||'—')}</p></div><button class="btn" onclick="bcJobEdit()">Edit Job Details</button></div>
+ <div class="cards"><div class="card"><div class="label">Job Status</div><div class="value" style="font-size:21px">${esc(j.job_status)}</div></div><div class="card"><div class="label">Project Type</div><div class="value" style="font-size:19px">${esc(j.job_type||'General Project')}</div></div><div class="card"><div class="label">Due Date</div><div class="value" style="font-size:21px">${bcSalesDate(j.due_date)}</div></div><div class="card"><div class="label">Tasks Complete</div><div class="value">${complete}/${bcJobTasks.length}</div></div></div>
+ <div class="twocol"><section class="panel"><h3>Job Information</h3><div class="formgrid"><div><div class="notice">Assigned To</div><b>${esc(j.assigned_to||'Not assigned')}</b></div><div><div class="notice">Priority</div><b>${esc(j.priority||'Normal')}</b></div><div><div class="notice">Start Date</div><b>${bcSalesDate(j.start_date)}</b></div><div><div class="notice">Approved Value</div><b>${bcSalesMoney(j.approved_amount)}</b></div></div><h3>Description</h3><p>${esc(j.description||'No description yet.')}</p><h3>Internal Notes</h3><p>${esc(j.internal_notes||'No internal notes yet.')}</p><button class="btn secondary" onclick="bcSalesDownload('${j.approved_quote_id}')">Open Approved Quote</button></section>
+ <section class="panel"><div class="heading"><h3>Tasks & Checklist</h3><button class="btn" onclick="bcJobTaskForm()">+ Add Task</button></div>${bcJobTasks.length?bcJobTasks.map(t=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><b>${esc(t.title)}</b><div class="notice">${esc(t.assigned_to||'Unassigned')} · Due ${bcSalesDate(t.due_date)}</div><select onchange="bcJobTaskStatus('${t.id}',this.value)">${['To Do','In Progress','Completed'].map(x=>`<option ${x===t.status?'selected':''}>${x}</option>`).join('')}</select></div>`).join(''):'<p class="notice">No tasks yet.</p>'}</section></div>
+ <div class="twocol" style="margin-top:20px"><section class="panel"><div class="heading"><h3>Documents & Artwork</h3><button class="btn" onclick="bcJobDocumentForm()">+ Upload File</button></div><p class="notice">Approved quote remains linked to this job.</p>${bcJobDocs.length?bcJobDocs.map(d=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><b>${esc(d.file_name)}</b><div class="notice">${esc(d.category)} · ${Math.round(d.file_size/1024)} KB</div><button class="btn secondary" onclick="bcJobDocumentOpen('${d.id}')">Open</button></div>`).join(''):'<p class="notice">No additional documents yet.</p>'}</section>
+ <section class="panel"><div class="heading"><h3>Job Notes</h3><button class="btn" onclick="bcJobNoteForm()">+ Add Note</button></div><p class="notice">Document customer conversations, proof decisions, approvals, revisions, and other job details here.</p>${bcJobActivity.filter(x=>x.action==='Note added'||x.action==='Job note added'||/note/i.test(x.action)).length?bcJobActivity.filter(x=>x.action==='Note added'||x.action==='Job note added'||/note/i.test(x.action)).map(x=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><div>${esc(x.detail)}</div><div class="notice">${new Date(x.created_at).toLocaleString()}</div></div>`).join(''):'<p class="notice">No notes added yet.</p>'}</section></div><div class="twocol" style="margin-top:20px"><section class="panel"><div class="heading"><h3>Activity History</h3></div>${bcJobActivity.length?bcJobActivity.map(x=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><b>${esc(x.action)}</b><div>${esc(x.detail)}</div><div class="notice">${new Date(x.created_at).toLocaleString()}</div></div>`).join(''):'<p class="notice">No activity yet.</p>'}</section></div>`;
+}
+function bcJobModal(html,onSubmit){
+ document.getElementById('modal').innerHTML=html;
+ document.getElementById('modalbg').classList.add('show');
+ document.getElementById('bcJobForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcJobMsg');btn.disabled=true;msg.textContent='Saving…';try{await onSubmit(e.target);closeModal();await bcLoadJobs();if(page==='tasks')await bcLoadAllTasks();else if(bcJobSelected)await bcJobOpen(bcJobSelected)}catch(err){msg.textContent='Error: '+err.message}finally{btn.disabled=false}};
+}
+function bcJobEdit(){
+ const j=bcJobs.find(x=>x.id===bcJobSelected);if(!j)return;
+ const field=(key,label,type='text')=>`<label>${label}<input name="${key}" type="${type}" value="${esc(j[key]||'')}"></label>`;
+ const select=(key,label,items)=>`<label>${label}<select name="${key}">${items.map(v=>`<option ${j[key]===v?'selected':''}>${v}</option>`).join('')}</select></label>`;
+ bcJobModal(`<h3>Edit Job Details</h3><form id="bcJobForm"><div class="formgrid">${select('job_status','Job Status',bcJobStatuses)}${select('job_type','Project Type',bcJobTypes)}${select('priority','Priority',bcJobPriorities)}${field('assigned_to','Assigned To')}${field('start_date','Start Date','date')}${field('due_date','Due Date','date')}<label class="wide">Description<textarea name="description" rows="3">${esc(j.description||'')}</textarea></label><label class="wide">Internal Notes<textarea name="internal_notes" rows="3">${esc(j.internal_notes||'')}</textarea></label></div><p class="notice" id="bcJobMsg"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button type="submit" class="btn">Save Job</button></div></form>`,async form=>{await bcCall('job_update',{jobId:bcJobSelected,...Object.fromEntries(new FormData(form))})});
+}
+function bcJobTaskForm(){
+ bcJobModal(`<h3>Add Job Task</h3><form id="bcJobForm"><div class="formgrid"><label class="wide">Task Title<input name="title" required></label><label>Assigned To<input name="assigned_to"></label><label>Due Date<input name="due_date" type="date"></label></div><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Add Task</button></div></form>`,async form=>{await bcCall('job_task_add',{jobId:bcJobSelected,...Object.fromEntries(new FormData(form))})});
+}
+async function bcJobTaskStatus(taskId,status){try{await bcCall('job_task_status',{jobId:bcJobSelected,taskId,status});await bcJobOpen(bcJobSelected)}catch(e){alert('Unable to update task: '+e.message)}}
+function bcJobNoteForm(){
+ bcJobModal(`<div class="bc-note-header"><h3>Add Job Note</h3><p>Record a conversation, update, decision, or other important job information.</p></div><form id="bcJobForm" class="bc-note-form"><label for="bcNoteText">Job note</label><textarea id="bcNoteText" name="detail" rows="6" placeholder="Enter your note here..." maxlength="5000" required autofocus></textarea><p class="bc-note-hint">This note will be saved to the job's activity history.</p><p id="bcJobMsg" class="notice" role="status"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Note</button></div></form>`,async form=>{await bcCall('job_note',{jobId:bcJobSelected,...Object.fromEntries(new FormData(form))})});
+}
+function bcJobDocumentForm(){
+ bcJobModal(`<h3>Upload Job Document</h3><form id="bcJobForm"><label>Document<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" required></label><label>Category<select name="category">${['General','Artwork','Proof','Production','Contract','Deliverable'].map(x=>`<option>${x}</option>`).join('')}</select></label><p class="notice">Maximum file size 15 MB.</p><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Upload Document</button></div></form>`,async form=>{
+ const file=form.elements.file.files[0];if(!file||file.size>15*1024*1024)throw Error('Choose a file up to 15 MB');
+ const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file)});
+ await bcCall('job_document_upload',{jobId:bcJobSelected,fileName:file.name,mime:file.type,base64,category:form.elements.category.value});
+ });
+}
+async function bcJobDocumentOpen(documentId){try{const r=await bcCall('job_document_url',{jobId:bcJobSelected,documentId});window.open(r.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open document: '+e.message)}}
+
+const bcNoteStyle=document.createElement('style');bcNoteStyle.textContent=`
+.modal:has(.bc-note-form){max-width:560px;padding:30px 32px;border-radius:14px}
+.bc-note-header h3{font-size:21px;line-height:1.3;color:#152d4b;margin:0 0 8px;font-weight:750}
+.bc-note-header p{margin:0 0 24px;color:#61748b;font-size:13px;line-height:1.55}
+.bc-note-form{display:flex;flex-direction:column;gap:0}
+.bc-note-form>label{display:block;font-size:13px;letter-spacing:0;color:#263c55;font-weight:700;margin:0 0 9px}
+.bc-note-form>textarea{display:block;box-sizing:border-box;width:100%;min-height:165px;resize:vertical;border:1px solid #cbd6e3;border-radius:9px;padding:14px 15px;font:inherit;font-size:14px;line-height:1.55;color:#21364d;background:#fff;outline:none}
+.bc-note-form>textarea:focus{border-color:#2465a0;box-shadow:0 0 0 3px rgba(36,101,160,.12)}
+.bc-note-form>textarea::placeholder{color:#9baabc}
+.bc-note-hint{margin:9px 0 0;font-size:12px;color:#718298}
+.bc-note-form .actions{border-top:1px solid #e6ebf2;margin-top:22px;padding-top:18px;gap:10px}
+.bc-note-form .actions button{min-height:40px;padding:0 18px}
+.bc-note-form #bcJobMsg:empty{display:none}
+`;document.head.appendChild(bcNoteStyle);
+
+let bcAllTasks=[],bcTaskJobs=[],bcTaskFilter='All',bcTaskQuery='',bcTaskLoading=false,bcStaff=[],bcTaskAssignee='all';
+async function bcLoadAllTasks(){
+ if(!bcSession)return;
+ bcTaskLoading=true;render();
+ try{const [r,staff]=await Promise.all([bcCall('job_tasks_all'),bcCall('staff_list')]);bcAllTasks=r.items||[];bcTaskJobs=r.jobs||[];bcStaff=staff.items||[]}
+ catch(e){alert('Unable to load tasks: '+e.message)}
+ finally{bcTaskLoading=false;render()}
+}
+function bcTaskDashboard(){
+ const tasks=bcAllTasks,jobs=Object.fromEntries(bcTaskJobs.map(j=>[j.id,j]));
+ const today=new Date().toISOString().slice(0,10);
+ const overdue=t=>t.status!=='Completed'&&t.due_date&&t.due_date<today;
+ const upcoming=t=>t.status!=='Completed'&&t.due_date&&t.due_date>=today;
+ const counts=[['All',tasks.length],['To Do',tasks.filter(t=>t.status==='To Do').length],['In Progress',tasks.filter(t=>t.status==='In Progress').length],['Overdue',tasks.filter(overdue).length],['Completed',tasks.filter(t=>t.status==='Completed').length]];
+ let shown=tasks.filter(t=>(bcTaskFilter==='All'||(bcTaskFilter==='Overdue'?overdue(t):t.status===bcTaskFilter))&&(bcTaskAssignee==='all'||(bcTaskAssignee==='unassigned'?!t.assigned_staff_id:t.assigned_staff_id===bcTaskAssignee))&&(!bcTaskQuery||[t.title,t.assigned_to,jobs[t.job_id]?.title,jobs[t.job_id]?.client_name].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))));
+ shown.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(!!overdue(b))-(!!overdue(a))||((a.due_date||'9999').localeCompare(b.due_date||'9999')));
+ return `<div class="heading"><div><h2>Tasks & Activities</h2><p>Track assignments, deadlines and outstanding work across all projects.</p></div><div class="bc-task-topactions"><button class="btn secondary" onclick="bcStaffDirectory()">Team Directory</button><button class="btn secondary" onclick="bcLoadAllTasks()">↻ Refresh</button></div></div>
+ <div class="bc-task-metrics">${counts.map(([name,n])=>`<button class="bc-task-metric ${bcTaskFilter===name?'selected':''}" onclick="bcTaskFilter=${JSON.stringify(name)};render()"><span>${name}</span><strong>${n}</strong></button>`).join('')}</div>
+ <section class="panel bc-task-panel"><div class="bc-task-toolbar"><div><h3>Project tasks</h3><p class="notice">${shown.length} task${shown.length===1?'':'s'} ${bcTaskLoading?'· Updating…':''}</p></div><div class="bc-task-filters"><select class="field" aria-label="Filter by employee" onchange="bcTaskAssignee=this.value;render()"><option value="all">All Employees</option><option value="unassigned" ${bcTaskAssignee==='unassigned'?'selected':''}>Unassigned</option>${bcStaff.filter(x=>x.active).map(x=>`<option value="${x.id}" ${bcTaskAssignee===x.id?'selected':''}>${esc(x.display_name)}</option>`).join('')}</select><input class="field bc-task-search" placeholder="Search tasks, clients or assignees" value="${esc(bcTaskQuery)}" oninput="bcTaskQuery=this.value;render();const e=document.querySelector('.bc-task-search');e.focus();e.setSelectionRange(e.value.length,e.value.length)" aria-label="Search tasks"></div></div>
+ <div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Task / Project</th><th>Assigned To</th><th>Due Date</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody>${shown.map(t=>{const j=jobs[t.job_id]||{};return `<tr><td><strong>${esc(t.title)}</strong><small>${esc(j.title||'Unknown job')} · ${esc(j.client_name||'')}</small></td><td>${esc(t.assigned_to||'Unassigned')}</td><td><span class="${overdue(t)?'bc-overdue':''}">${t.due_date?esc(t.due_date):'Not set'}${overdue(t)?' · Overdue':''}</span></td><td>${esc(t.priority||"Normal")}</td><td><select class="field bc-task-status" aria-label="Task status" onchange="bcChangeTaskStatus('${t.job_id}','${t.id}',this.value)">${['To Do','In Progress','Completed'].map(v=>`<option ${t.status===v?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="btn secondary" onclick="bcOpenTaskJob('${t.job_id}')">Open Job</button> <button class="btn secondary" onclick="bcAssignTask('${t.job_id}','${t.id}')">Assign</button></td></tr>`}).join('')||`<tr><td colspan="6" class="bc-task-empty">No tasks match this view.</td></tr>`}</tbody></table></div></section>`;
+}
+async function bcChangeTaskStatus(jobId,taskId,status){
+ try{await bcCall('job_task_status',{jobId,taskId,status});await bcLoadAllTasks()}
+ catch(e){alert('Unable to update task: '+e.message);await bcLoadAllTasks()}
+}
+async function bcOpenTaskJob(jobId){
+ page='jobs';bcJobSelected=null;render();await bcLoadJobs();await bcJobOpen(jobId);
+}
+
+const BC_EMPLOYEE_FN=BC_URL+'/functions/v1/blueprint-employee';
+async function bcEmployeeCall(action,extra={}){
+ if(!bcSession?.access_token)throw Error('Please sign in again.');
+ if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60){if(!await bcRefreshSession())throw Error('Session expired. Please sign in again.');}
+ const r=await fetch(BC_EMPLOYEE_FN,{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify({action,...extra})});
+ const data=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(data.error||'Employee invitation failed');
+ return data;
+}
+async function bcInviteEmployee(id){
+ const x=bcStaff.find(v=>v.id===id);
+ if(!x||!x.active||!x.email||x.user_id)return;
+ if(!confirm(`Send an employee login invitation to ${x.display_name} at ${x.email}?`))return;
+ const btn=document.getElementById('bcInviteBtn_'+id),msg=document.getElementById('bcJobMsg');
+ if(btn)btn.disabled=true;
+ if(msg)msg.textContent='Sending invitation…';
+ try{
+  await bcEmployeeCall('invite',{staffId:id});
+  const result=await bcCall('staff_list');bcStaff=result.items||[];
+  bcStaffDirectory();
+  const notice=document.getElementById('bcJobMsg');if(notice)notice.textContent='Invitation sent to '+x.email+'. The employee must accept the email invitation to sign in.';
+ }catch(e){if(msg)msg.textContent='Unable to send invitation: '+e.message;if(btn)btn.disabled=false;}
+}
+function bcStaffDirectory(){
+ const rows=bcStaff.map(x=>`<tr><td><strong>${esc(x.display_name)}</strong><small>${esc(x.email||'No email')}</small></td><td>${esc(x.role)}</td><td>${x.active?'Active':'Inactive'}</td><td><span class="notice">${x.user_id?'Invited / linked':!x.active?'Inactive':!x.email?'Email needed':'Not invited'}</span></td><td><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="bcStaffForm('${x.id}')">Edit</button>${x.active&&x.email&&!x.user_id?`<button class="btn" type="button" id="bcInviteBtn_${x.id}" onclick="bcInviteEmployee('${x.id}')">Send Invitation</button>`:''}</div></td></tr>`).join('');
+ bcJobModal(`<div class="bc-directory-heading"><h3>Team Directory</h3><p class="notice">Manage employees and send secure sign-in invitations. Invitations give employees access only to their assigned tasks.</p></div><div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th>Login</th><th>Actions</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="bc-task-empty">No employees added yet.</td></tr>'}</tbody></table></div><form id="bcJobForm"><p id="bcJobMsg" class="notice" role="status"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Close</button><button class="btn" type="button" onclick="bcStaffForm()">+ Add Employee</button></div></form>`,async()=>{});
+}
+function bcStaffForm(id=''){
+ const x=bcStaff.find(v=>v.id===id)||{};
+ bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Manage this employee profile. To send a login invitation, save an active employee with an email address, then return to Team Directory.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
+}
+function bcAssignTask(jobId,taskId){
+ const t=bcAllTasks.find(v=>v.id===taskId);if(!t)return;
+ bcJobModal(`<h3>Assign Task</h3><p class="notice">${esc(t.title)}</p><form id="bcJobForm" class="bc-staff-form"><label>Assigned Employee<select name="staffId"><option value="">Unassigned</option>${bcStaff.filter(x=>x.active).map(x=>`<option value="${x.id}" ${t.assigned_staff_id===x.id?'selected':''}>${esc(x.display_name)}</option>`).join('')}</select></label><label>Priority<select name="priority">${['Low','Normal','High','Urgent'].map(x=>`<option ${t.priority===x?'selected':''}>${x}</option>`).join('')}</select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Assignment</button></div></form>`,async form=>{await bcCall('job_task_assign',{jobId,taskId,...Object.fromEntries(new FormData(form))})});
+}
+const bcTaskStyle=document.createElement('style');
+bcTaskStyle.textContent=`
+.bc-task-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:22px}
+.bc-task-metric{text-align:left;background:white;border:1px solid #e2e9f1;border-radius:12px;padding:16px 18px;color:#1a344e;display:flex;flex-direction:column;gap:10px}
+.bc-task-metric span{font-size:12px;color:#65778b;font-weight:650}
+.bc-task-metric strong{font-size:26px;line-height:1.1}
+.bc-task-metric.selected{border-color:#215a93;box-shadow:0 0 0 2px rgba(33,90,147,.1)}
+.bc-task-panel{padding:22px}
+.bc-task-topactions,.bc-task-filters{display:flex;align-items:center;gap:10px}.bc-staff-form{display:grid;gap:15px}.bc-staff-form input,.bc-staff-form select{padding:11px;border:1px solid #d4dfeb;border-radius:8px;font:inherit;width:100%;box-sizing:border-box}.bc-directory-heading{margin-bottom:16px}.bc-task-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.bc-task-toolbar h3{margin:0 0 5px;color:#1b3652}
+.bc-task-toolbar .notice{margin:0}
+.bc-task-search{min-width:275px;max-width:370px;width:40%;padding:11px 13px}
+.bc-task-tablewrap{overflow-x:auto}
+.bc-task-table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.bc-task-table th{padding:12px 10px;background:#f6f8fb;color:#6a7c8f;font-size:11px;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+.bc-task-table td{padding:15px 10px;border-bottom:1px solid #e9edf2;vertical-align:middle}
+.bc-task-table td strong{display:block;color:#1b3652;font-size:13px}
+.bc-task-table td small{display:block;margin-top:5px;color:#728398;font-size:11px}
+.bc-task-status{min-width:135px;padding:8px}
+.bc-overdue{color:#b42336;font-weight:700}
+.bc-task-empty{text-align:center;color:#728398;padding:36px!important}
+@media(max-width:1000px){.bc-task-metrics{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.bc-task-metrics{grid-template-columns:repeat(2,1fr)}.bc-task-toolbar,.bc-task-filters{align-items:stretch;flex-direction:column}.bc-task-search{width:100%;max-width:none;min-width:0}}
+`;document.head.appendChild(bcTaskStyle);
+
+const bcSalesStyle=document.createElement('style');
+bcSalesStyle.textContent=`.cards>.card{min-width:0}.cards .value{overflow-wrap:anywhere}@media(min-width:1051px){.cards{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(min-width:701px) and (max-width:1050px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}`;
+document.head.appendChild(bcSalesStyle);
+const bcSalesPriorRender=render;
+render=function(){bcSalesPriorRender();if(bcSession&&page==='deals')document.getElementById('view').innerHTML=bcSalesView();if(bcSession&&page==='jobs')document.getElementById('view').innerHTML=bcJobsView();if(bcSession&&page==='tasks')document.getElementById('view').innerHTML=bcTaskDashboard()};
+const bcSalesPriorNavigate=navigate;
+navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}if(p==='jobs'&&bcSession){bcJobSelected=null;bcLoadJobs()}if(p==='tasks'&&bcSession)bcLoadAllTasks()};
+if(bcSession&&page==='deals')bcLoadSales();
+</script>
+</body></html>
