@@ -358,7 +358,26 @@ function bcSalesEdit(id){
  const o=id?bcSales.find(x=>x.id===id):null;
  const f=(name,label,type='text')=>`<label>${label}<input name="${name}" type="${type}" ${name==='title'?'required':''} ${type==='number'?'min="0" step="0.01"':''} value="${esc(o?.[name]||'')}"></label>`;
  const clientOptions='<option value="">No linked client</option>'+bcClients.filter(c=>!c.inactive).map(c=>`<option value="${esc(c.id)}" ${o?.client_item_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
- document.getElementById('modal').innerHTML=`<h3>${o?'Edit':'New'} Opportunity</h3><form id="bcSalesForm"><div class="formgrid">${f('title','Opportunity Name')}<label>Linked Client<select name="client_item_id" id="bcSalesClient">${clientOptions}</select></label>${f('contact_name','Contact Name')}${f('representative','Assigned Representative')}${f('source','Lead Source')}${f('estimated_value','Estimated Value','number')}${f('expected_close','Expected Close Date','date')}${f('next_follow_up','Next Follow-Up','date')}<label>Sales Stage<select name="stage">${bcStages.map(v=>`<option ${o?.stage===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(o?.notes||'')}</textarea></label></div><p id="bcSalesMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Opportunity</button></div></form>`;
+ document.getElementById('modal').innerHTML=`<h3>${o?'Edit':'New'} Opportunity</h3><form id="bcSalesForm"><div class="formgrid">${f('title','Opportunity Name')}<label>Linked Client<select name="client_item_id" id="bcSalesClient">${clientOptions}</select></label><label>Client Contact<select name="contact_name" id="bcSalesContact"><option value="">Select a linked client first</option></select></label>${f('representative','Assigned Representative')}${f('source','Lead Source')}${f('estimated_value','Estimated Value','number')}${f('expected_close','Expected Close Date','date')}${f('next_follow_up','Next Follow-Up','date')}<label>Sales Stage<select name="stage">${bcStages.map(v=>`<option ${o?.stage===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(o?.notes||'')}</textarea></label></div><p id="bcSalesMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Opportunity</button></div></form>`;
+ const form=document.getElementById('bcSalesForm');
+ const clientSelect=form.elements.client_item_id,contactSelect=form.elements.contact_name;
+ const populateClient=()=>{
+   const client=bcClients.find(c=>String(c.id)===String(clientSelect.value));
+   const matches=client?bcContacts.filter(c=>String(c.clientId)===String(client.id)||Boolean(client.clientNumber&&c.clientNumber===client.clientNumber)):[];
+   contactSelect.innerHTML='<option value="">'+(client?'Select contact (optional)':'Select a linked client first')+'</option>'+matches.map(c=>'<option value="'+esc(c.name)+'">'+esc(c.name)+(c.primary?' — Primary':'')+'</option>').join('');
+   const preferred=matches.find(c=>c.primary)||matches[0];
+   if(preferred)contactSelect.value=preferred.name;
+   if(client){
+     const notice=document.getElementById('bcSalesMsg');
+     notice.textContent='Linked to '+client.name+(client.clientNumber?' ('+client.clientNumber+')':'')+(preferred?' · Contact: '+preferred.name:' · No saved contacts found');
+   }else document.getElementById('bcSalesMsg').textContent='';
+ };
+ clientSelect.addEventListener('change',populateClient);
+ populateClient();
+ if(o?.contact_name){
+   if(!Array.from(contactSelect.options).some(x=>x.value===o.contact_name))contactSelect.add(new Option(o.contact_name,o.contact_name));
+   contactSelect.value=o.contact_name;
+ }
  document.getElementById('bcSalesForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcSalesMsg');btn.disabled=true;msg.textContent='Saving…';try{const v=Object.fromEntries(new FormData(e.target));const client=bcClients.find(c=>c.id===v.client_item_id);v.client_name=client?.name||'';v.client_number=client?.clientNumber||'';if(o)v.id=o.id;const r=await bcCall('sales_save',v);closeModal();await bcLoadSales();if(o)bcSalesSelected=o.id;else bcSalesSelected=r.item.id;await bcSalesOpen(bcSalesSelected)}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
  document.getElementById('modalbg').classList.add('show');
 }
@@ -375,7 +394,7 @@ document.head.appendChild(bcSalesStyle);
 const bcSalesPriorRender=render;
 render=function(){bcSalesPriorRender();if(page==='deals'&&bcSession)document.getElementById('view').innerHTML=bcSalesView()};
 const bcSalesPriorNavigate=navigate;
-navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession)bcLoadSales()};
+navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}};
 if(bcSession&&page==='deals')bcLoadSales();
 </script>
 </body></html>
