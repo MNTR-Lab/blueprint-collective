@@ -324,7 +324,7 @@ if(bcSession&&page==='leads')bcLoadLeads();
 <script>
 /* Blueprint Collective — Live Sales Pipeline */
 navs.find(n=>n[0]==='deals')[2]='Sales Pipeline';
-let bcSales=[],bcSalesLoading=false,bcSalesError='',bcSalesSelected=null,bcSalesQuotes=[];
+let bcSales=[],bcSalesLoading=false,bcSalesError='',bcSalesSelected=null,bcSalesQuotes=[],bcJobs=[];
 const bcStages=['Inquiry','Qualifying','Preparing Quote','Quote Sent','Negotiation','Won','Lost'];
 const bcQuoteStatuses=['Draft','Sent','Under Review','Revision Requested','Approved','Declined'];
 const bcSalesMoney=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));
@@ -346,11 +346,11 @@ function bcSalesView(){
 }
 function bcSalesDetail(o){
  const quotes=bcSalesQuotes;
- return `<div class="heading"><div><button class="btn secondary" onclick="bcSalesSelected=null;render()">← All Opportunities</button><h2 style="margin-top:14px">${esc(o.title)}</h2><p>${esc(o.client_name||'Unassigned client')} · ${esc(o.representative||'No representative')}</p></div><div class="actions"><button class="btn secondary" onclick="bcSalesEdit('${o.id}')">Edit Opportunity</button><button class="btn" onclick="alert('Convert to Job is planned for the Jobs & Projects integration. No job was created.')">Convert to Job</button></div></div>
+ return `<div class="heading"><div><button class="btn secondary" onclick="bcSalesSelected=null;render()">← All Opportunities</button><h2 style="margin-top:14px">${esc(o.title)}</h2><p>${esc(o.client_name||'Unassigned client')} · ${esc(o.representative||'No representative')}</p></div><div class="actions"><button class="btn secondary" onclick="bcSalesEdit('${o.id}')">Edit Opportunity</button><button class="btn" onclick="bcConvertToJob('${o.id}')" ${!quotes.some(q=>q.status==='Approved')?'disabled title="Approve a quote first"':''}>Convert to Job</button></div></div>
  <div class="cards"><div class="card"><div class="label">Opportunity Value</div><div class="value">${bcSalesMoney(o.estimated_value)}</div></div><div class="card"><div class="label">Current Stage</div><div class="value" style="font-size:22px">${esc(o.stage)}</div></div><div class="card"><div class="label">Expected Close</div><div class="value" style="font-size:22px">${bcSalesDate(o.expected_close)}</div></div><div class="card"><div class="label">Quote Versions</div><div class="value">${quotes.length}</div></div></div>
  <section class="panel" style="margin-bottom:20px"><h3>Sales Progress</h3><div style="display:flex;gap:5px;flex-wrap:wrap">${bcStages.map(x=>`<span style="padding:10px;border-radius:6px;background:${o.stage===x?'#244f84':'#e9edf3'};color:${o.stage===x?'white':'#263a55'};font-size:12px">${esc(x)}</span>`).join('')}</div><p class="notice">Next follow-up: ${bcSalesDate(o.next_follow_up)}</p></section>
  <div class="twocol"><section class="panel"><div class="heading"><div><h3>Documents & Quotes</h3><p>Secure document history and revisions</p></div><button class="btn" onclick="bcSalesUpload()">+ Upload Quote</button></div>
- ${quotes.length?quotes.map(q=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 0;border-bottom:1px solid #e4eaf1"><div><b>${esc(q.file_name)}</b><div class="notice">Version ${q.version_number} · ${bcSalesMoney(q.quoted_amount)} · ${bcSalesDate(q.date_sent)} · ${esc(q.status)}</div></div><button class="btn secondary" onclick="bcSalesDownload('${q.id}')">Open</button></div>`).join(''):'<p class="notice">No quotes uploaded yet.</p>'}
+ ${quotes.length?quotes.map(q=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 0;border-bottom:1px solid #e4eaf1"><div><b>${esc(q.file_name)}</b><div class="notice">Version ${q.version_number} · ${bcSalesMoney(q.quoted_amount)} · ${bcSalesDate(q.date_sent)} · ${esc(q.status)}</div></div><div class="actions"><button class="btn secondary" onclick="bcSalesDownload('${q.id}')">Open</button>${q.status!=='Approved'&&o.stage!=='Won'?`<button class="btn" onclick="bcApproveQuote('${q.id}')">Approve</button>`:''}</div></div>`).join(''):'<p class="notice">No quotes uploaded yet.</p>'}
  </section><section class="panel"><h3>Opportunity Information</h3><div class="formgrid"><div><div class="notice">Client</div><b>${esc(o.client_name||'—')}</b></div><div><div class="notice">Contact</div><b>${esc(o.contact_name||'—')}</b></div><div><div class="notice">Representative</div><b>${esc(o.representative||'—')}</b></div><div><div class="notice">Source</div><b>${esc(o.source||'—')}</b></div><div><div class="notice">Next Follow-Up</div><b>${bcSalesDate(o.next_follow_up)}</b></div><div><div class="notice">Stage</div><b>${esc(o.stage)}</b></div></div><h3>Notes</h3><p>${esc(o.notes||'No notes yet.')}</p></section></div>`;
 }
 async function bcSalesOpen(id){bcSalesSelected=id;bcSalesQuotes=[];render();try{const r=await bcCall('sales_quotes',{opportunityId:id});bcSalesQuotes=r.items||[];render()}catch(e){alert('Unable to load quotes: '+e.message)}}
@@ -388,13 +388,40 @@ function bcSalesUpload(){
  document.getElementById('modalbg').classList.add('show');
 }
 async function bcSalesDownload(quoteId){try{const r=await bcCall('sales_quote_url',{quoteId});window.open(r.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open quote: '+e.message)}}
+
+async function bcApproveQuote(quoteId){
+ if(!confirm('Confirm this quote has been approved by the customer? This does not create a job yet.'))return;
+ try{await bcCall('sales_quote_approve',{quoteId});await bcSalesOpen(bcSalesSelected)}
+ catch(e){alert('Unable to approve quote: '+e.message)}
+}
+async function bcConvertToJob(id){
+ const approved=bcSalesQuotes.filter(q=>q.status==='Approved').sort((a,b)=>b.version_number-a.version_number)[0];
+ if(!approved){alert('Approve a quote before converting this opportunity into a job.');return}
+ if(!confirm('Create a new job from approved quote version '+approved.version_number+' ('+bcSalesMoney(approved.quoted_amount)+')? This will mark the opportunity Won.'))return;
+ try{
+  const r=await bcCall('sales_convert_job',{opportunityId:id});
+  await bcLoadSales();
+  await bcSalesOpen(id);
+  alert((r.alreadyConverted?'This opportunity already has a job.':'Job created successfully.')+(r.warning?'\n'+r.warning:'')+'\nView it under Jobs & Projects.');
+ }catch(e){alert('Unable to convert to job: '+e.message)}
+}
+async function bcLoadJobs(){
+ if(!bcSession)return;
+ try{const r=await bcCall('sales_jobs_list');bcJobs=r.items||[];render()}catch(e){alert('Unable to load jobs: '+e.message)}
+}
+function bcJobsView(){
+ return `<div class="heading"><div><h2>Jobs & Projects</h2><p>Jobs created from approved sales opportunities.</p></div><button class="btn secondary" onclick="bcLoadJobs()">↻ Refresh</button></div>
+ <section class="panel"><h3>Active Job Records</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Approved Value</th><th>Status</th><th>Created</th><th>Quote</th></tr></thead><tbody>
+ ${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${bcSalesMoney(j.approved_amount)}</td><td>${esc(j.job_status)}</td><td>${bcSalesDate(j.created_at?.slice(0,10))}</td><td><button class="btn secondary" onclick="bcSalesDownload('${j.approved_quote_id}')">Open Approved Quote</button></td></tr>`).join(''):'<tr><td colspan="6">No converted jobs yet. Approve a quote and use Convert to Job in Sales Pipeline.</td></tr>'}
+ </tbody></table></div></section>`;
+}
 const bcSalesStyle=document.createElement('style');
 bcSalesStyle.textContent=`.cards>.card{min-width:0}.cards .value{overflow-wrap:anywhere}@media(min-width:1051px){.cards{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(min-width:701px) and (max-width:1050px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}`;
 document.head.appendChild(bcSalesStyle);
 const bcSalesPriorRender=render;
-render=function(){bcSalesPriorRender();if(page==='deals'&&bcSession)document.getElementById('view').innerHTML=bcSalesView()};
+render=function(){bcSalesPriorRender();if(bcSession&&page==='deals')document.getElementById('view').innerHTML=bcSalesView();if(bcSession&&page==='jobs')document.getElementById('view').innerHTML=bcJobsView()};
 const bcSalesPriorNavigate=navigate;
-navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}};
+navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}if(p==='jobs'&&bcSession)bcLoadJobs()};
 if(bcSession&&page==='deals')bcLoadSales();
 </script>
 </body></html>
