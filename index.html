@@ -424,7 +424,7 @@ function bcJobsView(){
  const active=bcJobs.filter(j=>!['Completed','Cancelled'].includes(j.job_status));
  return `<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage production, services, creative projects, customer orders, and internal work.</p></div><button class="btn secondary" onclick="bcLoadJobs()">↻ Refresh</button></div>
  <div class="cards"><div class="card"><div class="label">Total Jobs</div><div class="value">${bcJobs.length}</div></div><div class="card"><div class="label">Active Jobs</div><div class="value">${active.length}</div></div><div class="card"><div class="label">In Progress</div><div class="value">${bcJobs.filter(j=>j.job_status==='In Progress').length}</div></div><div class="card"><div class="label">Completed</div><div class="value">${bcJobs.filter(j=>j.job_status==='Completed').length}</div></div></div>
- <section class="panel"><h3>Job Directory</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Type</th><th>Status</th><th>Due Date</th><th>Value</th><th></th></tr></thead><tbody>${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${esc(j.job_type||'General Project')}</td><td>${esc(j.job_status)}</td><td>${bcSalesDate(j.due_date)}</td><td>${bcSalesMoney(j.approved_amount)}</td><td><button class="btn secondary" onclick="bcJobOpen('${j.id}')">Open Job</button></td></tr>`).join(''):'<tr><td colspan="7">No jobs yet. Convert an approved opportunity from Sales Pipeline.</td></tr>'}</tbody></table></div></section>`;
+ <section class="panel"><h3>Job Directory</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Type</th><th>Status</th><th>Due Date</th><th>Value</th><th></th></tr></thead><tbody>${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${esc(j.job_type||'General Project')}</td><td>${esc(j.job_status)}</td><td>${bcSalesDate(j.due_date)}</td><td>${bcSalesMoney(j.approved_amount)}</td><td><button class="btn secondary" onclick="bcJobOpen('${j.id}')">Open Job</button> <button class="btn secondary" onclick="bcAssignTask('${t.job_id}','${t.id}')">Assign</button></td></tr>`).join(''):'<tr><td colspan="7">No jobs yet. Convert an approved opportunity from Sales Pipeline.</td></tr>'}</tbody></table></div></section>`;
 }
 function bcJobDetail(j){
  const complete=bcJobTasks.filter(t=>t.status==='Completed').length;
@@ -438,7 +438,7 @@ function bcJobDetail(j){
 function bcJobModal(html,onSubmit){
  document.getElementById('modal').innerHTML=html;
  document.getElementById('modalbg').classList.add('show');
- document.getElementById('bcJobForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcJobMsg');btn.disabled=true;msg.textContent='Saving…';try{await onSubmit(e.target);closeModal();await bcLoadJobs();await bcJobOpen(bcJobSelected)}catch(err){msg.textContent='Error: '+err.message}finally{btn.disabled=false}};
+ document.getElementById('bcJobForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcJobMsg');btn.disabled=true;msg.textContent='Saving…';try{await onSubmit(e.target);closeModal();await bcLoadJobs();if(page==='tasks')await bcLoadAllTasks();else if(bcJobSelected)await bcJobOpen(bcJobSelected)}catch(err){msg.textContent='Error: '+err.message}finally{btn.disabled=false}};
 }
 function bcJobEdit(){
  const j=bcJobs.find(x=>x.id===bcJobSelected);if(!j)return;
@@ -477,11 +477,11 @@ const bcNoteStyle=document.createElement('style');bcNoteStyle.textContent=`
 .bc-note-form #bcJobMsg:empty{display:none}
 `;document.head.appendChild(bcNoteStyle);
 
-let bcAllTasks=[],bcTaskJobs=[],bcTaskFilter='All',bcTaskQuery='',bcTaskLoading=false;
+let bcAllTasks=[],bcTaskJobs=[],bcTaskFilter='All',bcTaskQuery='',bcTaskLoading=false,bcStaff=[],bcTaskAssignee='all';
 async function bcLoadAllTasks(){
  if(!bcSession)return;
  bcTaskLoading=true;render();
- try{const r=await bcCall('job_tasks_all');bcAllTasks=r.items||[];bcTaskJobs=r.jobs||[]}
+ try{const [r,staff]=await Promise.all([bcCall('job_tasks_all'),bcCall('staff_list')]);bcAllTasks=r.items||[];bcTaskJobs=r.jobs||[];bcStaff=staff.items||[]}
  catch(e){alert('Unable to load tasks: '+e.message)}
  finally{bcTaskLoading=false;render()}
 }
@@ -491,12 +491,12 @@ function bcTaskDashboard(){
  const overdue=t=>t.status!=='Completed'&&t.due_date&&t.due_date<today;
  const upcoming=t=>t.status!=='Completed'&&t.due_date&&t.due_date>=today;
  const counts=[['All',tasks.length],['To Do',tasks.filter(t=>t.status==='To Do').length],['In Progress',tasks.filter(t=>t.status==='In Progress').length],['Overdue',tasks.filter(overdue).length],['Completed',tasks.filter(t=>t.status==='Completed').length]];
- let shown=tasks.filter(t=>(bcTaskFilter==='All'||(bcTaskFilter==='Overdue'?overdue(t):t.status===bcTaskFilter))&&(!bcTaskQuery||[t.title,t.assigned_to,jobs[t.job_id]?.title,jobs[t.job_id]?.client_name].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))));
+ let shown=tasks.filter(t=>(bcTaskFilter==='All'||(bcTaskFilter==='Overdue'?overdue(t):t.status===bcTaskFilter))&&(bcTaskAssignee==='all'||(bcTaskAssignee==='unassigned'?!t.assigned_staff_id:t.assigned_staff_id===bcTaskAssignee))&&(!bcTaskQuery||[t.title,t.assigned_to,jobs[t.job_id]?.title,jobs[t.job_id]?.client_name].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))));
  shown.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(!!overdue(b))-(!!overdue(a))||((a.due_date||'9999').localeCompare(b.due_date||'9999')));
- return `<div class="heading"><div><h2>Tasks & Activities</h2><p>Track assignments, deadlines and outstanding work across all projects.</p></div><button class="btn secondary" onclick="bcLoadAllTasks()">↻ Refresh</button></div>
+ return `<div class="heading"><div><h2>Tasks & Activities</h2><p>Track assignments, deadlines and outstanding work across all projects.</p></div><div class="bc-task-topactions"><button class="btn secondary" onclick="bcStaffDirectory()">Team Directory</button><button class="btn secondary" onclick="bcLoadAllTasks()">↻ Refresh</button></div></div>
  <div class="bc-task-metrics">${counts.map(([name,n])=>`<button class="bc-task-metric ${bcTaskFilter===name?'selected':''}" onclick="bcTaskFilter=${JSON.stringify(name)};render()"><span>${name}</span><strong>${n}</strong></button>`).join('')}</div>
- <section class="panel bc-task-panel"><div class="bc-task-toolbar"><div><h3>Project tasks</h3><p class="notice">${shown.length} task${shown.length===1?'':'s'} ${bcTaskLoading?'· Updating…':''}</p></div><input class="field bc-task-search" placeholder="Search tasks, clients or assignees" value="${esc(bcTaskQuery)}" oninput="bcTaskQuery=this.value;render();const e=document.querySelector('.bc-task-search');e.focus();e.setSelectionRange(e.value.length,e.value.length)" aria-label="Search tasks"></div>
- <div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Task / Project</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody>${shown.map(t=>{const j=jobs[t.job_id]||{};return `<tr><td><strong>${esc(t.title)}</strong><small>${esc(j.title||'Unknown job')} · ${esc(j.client_name||'')}</small></td><td>${esc(t.assigned_to||'Unassigned')}</td><td><span class="${overdue(t)?'bc-overdue':''}">${t.due_date?esc(t.due_date):'Not set'}${overdue(t)?' · Overdue':''}</span></td><td><select class="field bc-task-status" aria-label="Task status" onchange="bcChangeTaskStatus('${t.job_id}','${t.id}',this.value)">${['To Do','In Progress','Completed'].map(v=>`<option ${t.status===v?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="btn secondary" onclick="bcOpenTaskJob('${t.job_id}')">Open Job</button></td></tr>`}).join('')||`<tr><td colspan="5" class="bc-task-empty">No tasks match this view.</td></tr>`}</tbody></table></div></section>`;
+ <section class="panel bc-task-panel"><div class="bc-task-toolbar"><div><h3>Project tasks</h3><p class="notice">${shown.length} task${shown.length===1?'':'s'} ${bcTaskLoading?'· Updating…':''}</p></div><div class="bc-task-filters"><select class="field" aria-label="Filter by employee" onchange="bcTaskAssignee=this.value;render()"><option value="all">All Employees</option><option value="unassigned" ${bcTaskAssignee==='unassigned'?'selected':''}>Unassigned</option>${bcStaff.filter(x=>x.active).map(x=>`<option value="${x.id}" ${bcTaskAssignee===x.id?'selected':''}>${esc(x.display_name)}</option>`).join('')}</select><input class="field bc-task-search" placeholder="Search tasks, clients or assignees" value="${esc(bcTaskQuery)}" oninput="bcTaskQuery=this.value;render();const e=document.querySelector('.bc-task-search');e.focus();e.setSelectionRange(e.value.length,e.value.length)" aria-label="Search tasks"></div></div>
+ <div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Task / Project</th><th>Assigned To</th><th>Due Date</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody>${shown.map(t=>{const j=jobs[t.job_id]||{};return `<tr><td><strong>${esc(t.title)}</strong><small>${esc(j.title||'Unknown job')} · ${esc(j.client_name||'')}</small></td><td>${esc(t.assigned_to||'Unassigned')}</td><td><span class="${overdue(t)?'bc-overdue':''}">${t.due_date?esc(t.due_date):'Not set'}${overdue(t)?' · Overdue':''}</span></td><td>${esc(t.priority||"Normal")}</td><td><select class="field bc-task-status" aria-label="Task status" onchange="bcChangeTaskStatus('${t.job_id}','${t.id}',this.value)">${['To Do','In Progress','Completed'].map(v=>`<option ${t.status===v?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="btn secondary" onclick="bcOpenTaskJob('${t.job_id}')">Open Job</button> <button class="btn secondary" onclick="bcAssignTask('${t.job_id}','${t.id}')">Assign</button></td></tr>`}).join('')||`<tr><td colspan="6" class="bc-task-empty">No tasks match this view.</td></tr>`}</tbody></table></div></section>`;
 }
 async function bcChangeTaskStatus(jobId,taskId,status){
  try{await bcCall('job_task_status',{jobId,taskId,status});await bcLoadAllTasks()}
@@ -504,6 +504,19 @@ async function bcChangeTaskStatus(jobId,taskId,status){
 }
 async function bcOpenTaskJob(jobId){
  page='jobs';bcJobSelected=null;render();await bcLoadJobs();await bcJobOpen(jobId);
+}
+
+function bcStaffDirectory(){
+ const rows=bcStaff.map(x=>`<tr><td><strong>${esc(x.display_name)}</strong><small>${esc(x.email||'No email')}</small></td><td>${esc(x.role)}</td><td>${x.active?'Active':'Inactive'}</td><td><button class="btn secondary" type="button" onclick="bcStaffForm('${x.id}')">Edit</button></td></tr>`).join('');
+ bcJobModal(`<div class="bc-directory-heading"><h3>Team Directory</h3><p class="notice">Manage employee profiles for task assignments. Profiles do not grant login access.</p></div><div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="bc-task-empty">No employees added yet.</td></tr>'}</tbody></table></div><form id="bcJobForm"><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Close</button><button class="btn" type="button" onclick="bcStaffForm()">+ Add Employee</button></div></form>`,async()=>{});
+}
+function bcStaffForm(id=''){
+ const x=bcStaff.find(v=>v.id===id)||{};
+ bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Employee directory only — login invitations will be configured separately.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
+}
+function bcAssignTask(jobId,taskId){
+ const t=bcAllTasks.find(v=>v.id===taskId);if(!t)return;
+ bcJobModal(`<h3>Assign Task</h3><p class="notice">${esc(t.title)}</p><form id="bcJobForm" class="bc-staff-form"><label>Assigned Employee<select name="staffId"><option value="">Unassigned</option>${bcStaff.filter(x=>x.active).map(x=>`<option value="${x.id}" ${t.assigned_staff_id===x.id?'selected':''}>${esc(x.display_name)}</option>`).join('')}</select></label><label>Priority<select name="priority">${['Low','Normal','High','Urgent'].map(x=>`<option ${t.priority===x?'selected':''}>${x}</option>`).join('')}</select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Assignment</button></div></form>`,async form=>{await bcCall('job_task_assign',{jobId,taskId,...Object.fromEntries(new FormData(form))})});
 }
 const bcTaskStyle=document.createElement('style');
 bcTaskStyle.textContent=`
@@ -513,7 +526,7 @@ bcTaskStyle.textContent=`
 .bc-task-metric strong{font-size:26px;line-height:1.1}
 .bc-task-metric.selected{border-color:#215a93;box-shadow:0 0 0 2px rgba(33,90,147,.1)}
 .bc-task-panel{padding:22px}
-.bc-task-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.bc-task-topactions,.bc-task-filters{display:flex;align-items:center;gap:10px}.bc-staff-form{display:grid;gap:15px}.bc-staff-form input,.bc-staff-form select{padding:11px;border:1px solid #d4dfeb;border-radius:8px;font:inherit;width:100%;box-sizing:border-box}.bc-directory-heading{margin-bottom:16px}.bc-task-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
 .bc-task-toolbar h3{margin:0 0 5px;color:#1b3652}
 .bc-task-toolbar .notice{margin:0}
 .bc-task-search{min-width:275px;max-width:370px;width:40%;padding:11px 13px}
@@ -527,7 +540,7 @@ bcTaskStyle.textContent=`
 .bc-overdue{color:#b42336;font-weight:700}
 .bc-task-empty{text-align:center;color:#728398;padding:36px!important}
 @media(max-width:1000px){.bc-task-metrics{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:700px){.bc-task-metrics{grid-template-columns:repeat(2,1fr)}.bc-task-toolbar{align-items:stretch;flex-direction:column}.bc-task-search{width:100%;max-width:none;min-width:0}}
+@media(max-width:700px){.bc-task-metrics{grid-template-columns:repeat(2,1fr)}.bc-task-toolbar,.bc-task-filters{align-items:stretch;flex-direction:column}.bc-task-search{width:100%;max-width:none;min-width:0}}
 `;document.head.appendChild(bcTaskStyle);
 
 const bcSalesStyle=document.createElement('style');
