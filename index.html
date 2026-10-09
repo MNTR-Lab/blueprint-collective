@@ -112,4 +112,41 @@ openClientIntake=function(id){
 bcSession=bcGetSession();
 if(bcSession){bcLoad()}
 </script>
+
+<script>
+/* Existing-client editing — secure MNTR+ Database integration */
+const bcOriginalConvert=bcConvert;
+bcConvert=function(item){
+  const x=bcOriginalConvert(item);
+  return {...x,phone:bcCol(item,'phone_mm7z9nmt'),
+    address:bcCol(item,'text_mm7zqck6'),city:bcCol(item,'text_mm7z97jd'),
+    state:bcCol(item,'text_mm7zrzk4'),zip:bcCol(item,'text_mm7zahv'),
+    type:bcCol(item,'dropdown_mm7ztz3y'),source:bcCol(item,'text_mm7z9jx6'),
+    notes:bcCol(item,'long_text_mm7zqqpy')};
+};
+bcClientRows=function(items){
+  return `<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th><th>Actions</th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'—')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':'Active')}</td><td><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${esc(x.id)}',this.checked)"> Make Inactive</label></td><td><button class="btn secondary" onclick="openClientIntake('${esc(x.id)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
+};
+openClientIntake=function(id){
+  if(!bcSession){bcError='Sign in first.';render();return}
+  const x=id?bcClients.find(c=>String(c.id)===String(id)):null;
+  if(id&&!x){bcError='Client not found. Refresh the directory and try again.';render();return}
+  const fields=[['name','Company / Client Name',true],['contactName','Primary Contact Name',true],['email','Contact Email',true],['phone','Phone Number',false],['type','Customer Type',false],['source','Lead Source',false],['address','Business Address',false],['city','City',false],['state','State',false],['zip','ZIP Code',false],['notes','Notes',false]];
+  document.getElementById('modal').innerHTML=`<h3>${x?'Edit Client':'New Client Intake'}</h3><p class="notice">${x?'Client number: '+esc(x.clientNumber||'—')+' (permanent)':'A permanent client number will be generated when saved.'}</p><form id="clientIntakeForm"><div class="formgrid">${fields.map(([key,label,required])=>`<label class="${key==='name'||key==='notes'?'wide':''}">${label}${key==='notes'?`<textarea name="${key}" rows="3">${esc(x?.[key]||'')}</textarea>`:key==='type'?`<select name="type">${['','Enterprise','SMB','Individual','Other'].map(v=>`<option value="${v}" ${x?.type===v?'selected':''}>${v||'Select type'}</option>`).join('')}</select>`:`<input name="${key}" ${key==='email'?'type="email"':'type="text"'} value="${esc(x?.[key]||'')}" ${required?'required':''}>`}</label>`).join('')}</div><p id="bcFormError" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">${x?'Save Client Changes':'Create Client in Database'}</button></div></form>`;
+  document.getElementById('clientIntakeForm').onsubmit=async e=>{
+    e.preventDefault();
+    const button=e.target.querySelector('button[type=submit]'),err=document.getElementById('bcFormError');
+    button.disabled=true;err.textContent=x?'Updating client…':'Saving client to database…';
+    try{
+      const vals=Object.fromEntries(new FormData(e.target));
+      const result=await bcCall(x?'update':'create',x?{id:x.id,...vals}:vals);
+      closeModal();await bcLoad();
+      if(bcError)alert('Saved, but refreshing the directory failed: '+bcError);
+      else alert(x?'Client changes saved to database. Client number: '+result.clientNumber:'Client created in database. Client number: '+result.clientNumber);
+    }catch(ex){err.textContent='Unable to save: '+ex.message}
+    finally{button.disabled=false}
+  };
+  document.getElementById('modalbg').classList.add('show');
+};
+</script>
 </body></html>
