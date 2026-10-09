@@ -149,4 +149,80 @@ openClientIntake=function(id){
   document.getElementById('modalbg').classList.add('show');
 };
 </script>
+
+<script>
+/* Client directory search, filtering and sorting.
+   Searches the live client list returned by the authenticated backend. */
+let bcSearch='',bcTypeFilter='all',bcRepFilter='all',bcSort='name-asc';
+const bcBeforeFiltersConvert=bcConvert;
+bcConvert=function(item){
+ const x=bcBeforeFiltersConvert(item);
+ return {...x,representative:bcCol(item,'multiple_person_mm7zrbtx'),
+   createdAt:bcCol(item,'date_mm7z5c7y')};
+};
+function bcSearchChange(v){bcSearch=v;bcRenderClientResults()}
+function bcFilterChange(key,v){
+ if(key==='type')bcTypeFilter=v;
+ if(key==='rep')bcRepFilter=v;
+ if(key==='sort')bcSort=v;
+ bcRenderClientResults();
+}
+function bcClearFilters(){
+ bcSearch='';bcTypeFilter='all';bcRepFilter='all';bcSort='name-asc';render();
+}
+function bcFilteredClients(){
+ const q=bcSearch.trim().toLocaleLowerCase();
+ const current=clientTab==='inactive'?bcClients.filter(x=>x.inactive):bcClients.filter(x=>!x.inactive);
+ const filtered=current.filter(x=>{
+  const searchable=[x.name,x.clientNumber,x.contactName,x.email,x.phone,x.address,x.city,x.state,x.zip].map(v=>String(v||'').toLocaleLowerCase());
+  const matchesSearch=!q||searchable.some(v=>v.includes(q));
+  const matchesType=bcTypeFilter==='all'||String(x.type||'').split(',').map(v=>v.trim()).includes(bcTypeFilter);
+  const matchesRep=bcRepFilter==='all'||(bcRepFilter==='unassigned'?!x.representative:x.representative===bcRepFilter);
+  return matchesSearch&&matchesType&&matchesRep;
+ });
+ const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
+ filtered.sort((a,b)=>{
+  if(bcSort==='name-desc')return collator.compare(b.name||'',a.name||'');
+  if(bcSort==='newest')return (b.createdAt||'').localeCompare(a.createdAt||'')||collator.compare(a.name||'',b.name||'');
+  if(bcSort==='oldest')return (a.createdAt||'').localeCompare(b.createdAt||'')||collator.compare(a.name||'',b.name||'');
+  if(bcSort==='number')return collator.compare(a.clientNumber||'',b.clientNumber||'');
+  return collator.compare(a.name||'',b.name||'');
+ });
+ return filtered;
+}
+function bcRenderClientResults(){
+ const target=document.getElementById('bcFilteredResults');
+ if(!target)return render();
+ const rows=bcFilteredClients();
+ target.innerHTML=`<p class="notice">Showing ${rows.length} of ${clientTab==='inactive'?bcClients.filter(x=>x.inactive).length:bcClients.filter(x=>!x.inactive).length} clients</p>${bcClientRows(rows)}`;
+}
+const bcClientManagementBeforeFilters=clientManagement;
+clientManagement=function(){
+ if(!bcSession||clientTab==='contacts')return bcClientManagementBeforeFilters();
+ const active=bcClients.filter(x=>!x.inactive),inactive=bcClients.filter(x=>x.inactive);
+ const tabs=[['active','Active Clients',active.length],['inactive','Inactive Clients',inactive.length],['contacts','Contacts (demo)',records('contacts').length]];
+ const options=(values,current)=>values.map(([v,label])=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(label)}</option>`).join('');
+ const reps=[...new Set(bcClients.map(x=>x.representative).filter(Boolean))].sort();
+ const repOptions=[['all','All representatives'],['unassigned','Unassigned'],...reps.map(x=>[x,x])];
+ const typeOptions=[['all','All customer types'],...['Enterprise','SMB','Individual','Other'].map(x=>[x,x])];
+ const sortOptions=[['name-asc','Company A–Z'],['name-desc','Company Z–A'],['newest','Newest first'],['oldest','Oldest first'],['number','Client number']];
+ return `<div class="heading"><div><h2>Clients</h2><p>Live MNTR+ Database client directory</p></div><div class="actions"><button class="btn secondary" onclick="bcLoad()">↻ Refresh</button><button class="btn secondary" onclick="bcLogout()">Sign Out</button><button class="btn" onclick="openClientIntake()">+ New Client</button></div></div>
+ ${bcError?`<div class="alert">${esc(bcError)}</div>`:''}
+ ${bcLoading?'<p class="notice">Loading live client records…</p>':''}
+ ${!bcLoaded?'<p class="notice">Live records have not loaded yet. Select Refresh.</p>':''}
+ <p class="notice">Clients are managed through the MNTR+ Database. Other CRM modules are still demonstrations.</p>
+ <div class="toolbar" role="tablist">${tabs.map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>
+ <section class="panel">
+ <div class="heading"><div><h3>${clientTab==='inactive'?'Inactive Clients':'Active Clients'}</h3><p>Search and filter your client records</p></div></div>
+ <div class="formgrid" style="margin-bottom:14px">
+ <label class="wide">Search clients<input id="bcClientSearch" type="search" placeholder="Company, client number, contact, email, phone, address…" value="${esc(bcSearch)}" oninput="bcSearchChange(this.value)"></label>
+ <label>Customer type<select onchange="bcFilterChange('type',this.value)">${options(typeOptions,bcTypeFilter)}</select></label>
+ <label>Assigned representative<select onchange="bcFilterChange('rep',this.value)">${options(repOptions,bcRepFilter)}</select></label>
+ <label>Sort by<select onchange="bcFilterChange('sort',this.value)">${options(sortOptions,bcSort)}</select></label>
+ </div>
+ <div style="margin-bottom:12px"><button class="btn secondary" onclick="bcClearFilters()">Clear Filters</button></div>
+ <div id="bcFilteredResults"><p class="notice">Showing ${bcFilteredClients().length} of ${clientTab==='inactive'?inactive.length:active.length} clients</p>${bcClientRows(bcFilteredClients())}</div>
+ </section>`;
+};
+</script>
 </body></html>
