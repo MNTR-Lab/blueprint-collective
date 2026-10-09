@@ -1,0 +1,243 @@
+
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const ORG = "7cf3f170-30c2-4b7f-9fbb-166982c3b936";
+
+const cors = {
+  "Access-Control-Allow-Origin": "https://blueprint-collective.pages.dev",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
+};
+
+const send = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: cors });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: cors });
+  }
+
+  if (req.method !== "POST") {
+    return send({ error: "Method not allowed" }, 405);
+  }
+
+  try {
+    const authorization = req.headers.get("Authorization") || "";
+
+    if (!authorization.startsWith("Bearer ")) {
+      return send({ error: "Authentication required" }, 401);
+    }
+
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const auth = createClient(url, anon);
+    const db = createClient(url, service);
+
+    const {
+      data: { user },
+      error: authError,
+    } = await auth.auth.getUser(authorization.slice(7));
+
+    if (authError || !user) {
+      return send({ error: "Invalid session" }, 401);
+    }
+
+    const body = await req.json();
+    const action = String(body.action || "");
+
+    const { data: membership } = await db
+      .from("memberships")
+      .select("role")
+      .eq("organization_id", ORG)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return send({ error: "Workspace access denied" }, 403);
+    }
+
+    const { data: staff } = await db
+      .from("staff_directory")
+      .select("id,display_name,role,active,user_id")
+      .eq("organization_id", ORG)
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (action === "profile") {
+      return send({
+        isAdmin: membership.role === "admin",
+        staff: staff || null,
+      });
+    }
+
+    if (action === "invite") {
+      if (membership.role !== "admin") {
+        return send({ error: "Administrator required" }, 403);
+      }
+
+      const id = String(body.staffId || "");
+
+      const { data: target } = await db
+        .from("staff_directory")
+        .select("id,email,active,user_id")
+        .eq("organization_id", ORG)
+        .eq("id", id)
+        .maybeSingle();
+
+      if (!target || !target.active || !target.email) {
+        return send(
+          { error: "Active employee with email required" },
+          400
+        );
+      }
+
+      if (target.user_id) {
+        return send(
+          { error: "Employee already linked to an account" },
+          409
+        );
+      }
+
+      const { data: invite, error: inviteError } =
+        await db.auth.admin.inviteUserByEmail(target.email, {
+          redirectTo:
+            "https://blueprint-collective.pages.dev/employee.html",
+        });
+
+      if (inviteError) {
+        return send({ error: inviteError.message }, 400);
+      }
+
+      const uid = invite.user?.id;
+
+      if (!uid) {
+        return send(
+          { error: "Invitation did not return a user" },
+          500
+        );
+      }
+
+      const { error: membershipError } = await db
+        .from("memberships")
+        .upsert(
+          {
+            organization_id: ORG,
+            user_id: uid,
+            role: "employee",
+          },
+          { onConflict: "organization_id,user_id" }
+        );
+
+      if (membershipError) throw membershipError;
+
+      const { error: staffError } = await db
+        .from("staff_directory")
+        .update({
+          user_id: uid,
+          invitation_status: "Invited",
+          invited_at: new Date().toISOString(),
+        })
+        .eq("organization_id", ORG)
+        .eq("id", id);
+
+      if (staffError) throw staffError;
+
+      return send({ ok: true });
+    }
+
+    if (!staff) {
+      return send(
+        { error: "Active employee profile required" },
+        403
+      );
+    }
+
+    if (action === "my_tasks") {
+      const { data: tasks, error } = await db
+        .from("job_tasks")
+        .select(
+          "id,job_id,title,status,priority,due_date,updated_at"
+        )
+        .eq("organization_id", ORG)
+        .eq("assigned_staff_id", staff.id)
+        .limit(200);
+
+      if (error) throw error;
+
+      const ids = [
+        ...new Set((tasks || []).map((t: any) => t.job_id)),
+      ];
+
+      const { data: jobs, error: jobError } = ids.length
+        ? await db
+            .from("sales_jobs")
+            .select("id,title")
+            .eq("organization_id", ORG)
+            .in("id", ids)
+        : { data: [], error: null };
+
+      if (jobError) throw jobError;
+
+      return send({
+        tasks: tasks || [],
+        jobs: jobs || [],
+      });
+    }
+
+    if (action === "update_task") {
+      const taskId = String(body.taskId || "");
+      const status = String(body.status || "");
+
+      if (!["To Do", "In Progress", "Completed"].includes(status)) {
+        return send({ error: "Invalid status" }, 400);
+      }
+
+      const { data: task, error } = await db
+        .from("job_tasks")
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("organization_id", ORG)
+        .eq("assigned_staff_id", staff.id)
+        .eq("id", taskId)
+        .select("id,job_id,title,status")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!task) {
+        return send(
+          { error: "Task not assigned to you" },
+          404
+        );
+      }
+
+      await db.from("job_activity").insert({
+        organization_id: ORG,
+        job_id: task.job_id,
+        action: "Task updated",
+        detail: task.title + " → " + status,
+        actor_id: user.id,
+      });
+
+      return send({ task });
+    }
+
+    return send({ error: "Unknown action" }, 400);
+  } catch (error) {
+    return send(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unexpected error",
+      },
+      500
+    );
+  }
+});
