@@ -476,13 +476,67 @@ const bcNoteStyle=document.createElement('style');bcNoteStyle.textContent=`
 .bc-note-form .actions button{min-height:40px;padding:0 18px}
 .bc-note-form #bcJobMsg:empty{display:none}
 `;document.head.appendChild(bcNoteStyle);
+
+let bcAllTasks=[],bcTaskJobs=[],bcTaskFilter='All',bcTaskQuery='',bcTaskLoading=false;
+async function bcLoadAllTasks(){
+ if(!bcSession)return;
+ bcTaskLoading=true;render();
+ try{const r=await bcCall('job_tasks_all');bcAllTasks=r.items||[];bcTaskJobs=r.jobs||[]}
+ catch(e){alert('Unable to load tasks: '+e.message)}
+ finally{bcTaskLoading=false;render()}
+}
+function bcTaskDashboard(){
+ const tasks=bcAllTasks,jobs=Object.fromEntries(bcTaskJobs.map(j=>[j.id,j]));
+ const today=new Date().toISOString().slice(0,10);
+ const overdue=t=>t.status!=='Completed'&&t.due_date&&t.due_date<today;
+ const upcoming=t=>t.status!=='Completed'&&t.due_date&&t.due_date>=today;
+ const counts=[['All',tasks.length],['To Do',tasks.filter(t=>t.status==='To Do').length],['In Progress',tasks.filter(t=>t.status==='In Progress').length],['Overdue',tasks.filter(overdue).length],['Completed',tasks.filter(t=>t.status==='Completed').length]];
+ let shown=tasks.filter(t=>(bcTaskFilter==='All'||(bcTaskFilter==='Overdue'?overdue(t):t.status===bcTaskFilter))&&(!bcTaskQuery||[t.title,t.assigned_to,jobs[t.job_id]?.title,jobs[t.job_id]?.client_name].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))));
+ shown.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(!!overdue(b))-(!!overdue(a))||((a.due_date||'9999').localeCompare(b.due_date||'9999')));
+ return `<div class="heading"><div><h2>Tasks & Activities</h2><p>Track assignments, deadlines and outstanding work across all projects.</p></div><button class="btn secondary" onclick="bcLoadAllTasks()">↻ Refresh</button></div>
+ <div class="bc-task-metrics">${counts.map(([name,n])=>`<button class="bc-task-metric ${bcTaskFilter===name?'selected':''}" onclick="bcTaskFilter=${JSON.stringify(name)};render()"><span>${name}</span><strong>${n}</strong></button>`).join('')}</div>
+ <section class="panel bc-task-panel"><div class="bc-task-toolbar"><div><h3>Project tasks</h3><p class="notice">${shown.length} task${shown.length===1?'':'s'} ${bcTaskLoading?'· Updating…':''}</p></div><input class="field bc-task-search" placeholder="Search tasks, clients or assignees" value="${esc(bcTaskQuery)}" oninput="bcTaskQuery=this.value;render();const e=document.querySelector('.bc-task-search');e.focus();e.setSelectionRange(e.value.length,e.value.length)" aria-label="Search tasks"></div>
+ <div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Task / Project</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody>${shown.map(t=>{const j=jobs[t.job_id]||{};return `<tr><td><strong>${esc(t.title)}</strong><small>${esc(j.title||'Unknown job')} · ${esc(j.client_name||'')}</small></td><td>${esc(t.assigned_to||'Unassigned')}</td><td><span class="${overdue(t)?'bc-overdue':''}">${t.due_date?esc(t.due_date):'Not set'}${overdue(t)?' · Overdue':''}</span></td><td><select class="field bc-task-status" aria-label="Task status" onchange="bcChangeTaskStatus('${t.job_id}','${t.id}',this.value)">${['To Do','In Progress','Completed'].map(v=>`<option ${t.status===v?'selected':''}>${v}</option>`).join('')}</select></td><td><button class="btn secondary" onclick="bcOpenTaskJob('${t.job_id}')">Open Job</button></td></tr>`}).join('')||`<tr><td colspan="5" class="bc-task-empty">No tasks match this view.</td></tr>`}</tbody></table></div></section>`;
+}
+async function bcChangeTaskStatus(jobId,taskId,status){
+ try{await bcCall('job_task_status',{jobId,taskId,status});await bcLoadAllTasks()}
+ catch(e){alert('Unable to update task: '+e.message);await bcLoadAllTasks()}
+}
+async function bcOpenTaskJob(jobId){
+ page='jobs';bcJobSelected=null;render();await bcLoadJobs();await bcJobOpen(jobId);
+}
+const bcTaskStyle=document.createElement('style');
+bcTaskStyle.textContent=`
+.bc-task-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:22px}
+.bc-task-metric{text-align:left;background:white;border:1px solid #e2e9f1;border-radius:12px;padding:16px 18px;color:#1a344e;display:flex;flex-direction:column;gap:10px}
+.bc-task-metric span{font-size:12px;color:#65778b;font-weight:650}
+.bc-task-metric strong{font-size:26px;line-height:1.1}
+.bc-task-metric.selected{border-color:#215a93;box-shadow:0 0 0 2px rgba(33,90,147,.1)}
+.bc-task-panel{padding:22px}
+.bc-task-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.bc-task-toolbar h3{margin:0 0 5px;color:#1b3652}
+.bc-task-toolbar .notice{margin:0}
+.bc-task-search{min-width:275px;max-width:370px;width:40%;padding:11px 13px}
+.bc-task-tablewrap{overflow-x:auto}
+.bc-task-table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.bc-task-table th{padding:12px 10px;background:#f6f8fb;color:#6a7c8f;font-size:11px;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+.bc-task-table td{padding:15px 10px;border-bottom:1px solid #e9edf2;vertical-align:middle}
+.bc-task-table td strong{display:block;color:#1b3652;font-size:13px}
+.bc-task-table td small{display:block;margin-top:5px;color:#728398;font-size:11px}
+.bc-task-status{min-width:135px;padding:8px}
+.bc-overdue{color:#b42336;font-weight:700}
+.bc-task-empty{text-align:center;color:#728398;padding:36px!important}
+@media(max-width:1000px){.bc-task-metrics{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.bc-task-metrics{grid-template-columns:repeat(2,1fr)}.bc-task-toolbar{align-items:stretch;flex-direction:column}.bc-task-search{width:100%;max-width:none;min-width:0}}
+`;document.head.appendChild(bcTaskStyle);
+
 const bcSalesStyle=document.createElement('style');
 bcSalesStyle.textContent=`.cards>.card{min-width:0}.cards .value{overflow-wrap:anywhere}@media(min-width:1051px){.cards{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(min-width:701px) and (max-width:1050px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}`;
 document.head.appendChild(bcSalesStyle);
 const bcSalesPriorRender=render;
-render=function(){bcSalesPriorRender();if(bcSession&&page==='deals')document.getElementById('view').innerHTML=bcSalesView();if(bcSession&&page==='jobs')document.getElementById('view').innerHTML=bcJobsView()};
+render=function(){bcSalesPriorRender();if(bcSession&&page==='deals')document.getElementById('view').innerHTML=bcSalesView();if(bcSession&&page==='jobs')document.getElementById('view').innerHTML=bcJobsView();if(bcSession&&page==='tasks')document.getElementById('view').innerHTML=bcTaskDashboard()};
 const bcSalesPriorNavigate=navigate;
-navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}if(p==='jobs'&&bcSession){bcJobSelected=null;bcLoadJobs()}};
+navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}if(p==='jobs'&&bcSession){bcJobSelected=null;bcLoadJobs()}if(p==='tasks'&&bcSession)bcLoadAllTasks()};
 if(bcSession&&page==='deals')bcLoadSales();
 </script>
 </body></html>
