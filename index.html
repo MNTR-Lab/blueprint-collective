@@ -320,4 +320,59 @@ const bcOriginalNavigate=navigate;
 navigate=function(p){bcOriginalNavigate(p);if(p==='leads'&&bcSession)bcLoadLeads()};
 if(bcSession&&page==='leads')bcLoadLeads();
 </script>
+
+<script>
+/* Blueprint Collective — Live Sales Pipeline */
+navs.find(n=>n[0]==='deals')[2]='Sales Pipeline';
+let bcSales=[],bcSalesLoading=false,bcSalesError='',bcSalesSelected=null,bcSalesQuotes=[];
+const bcStages=['Inquiry','Qualifying','Preparing Quote','Quote Sent','Negotiation','Won','Lost'];
+const bcQuoteStatuses=['Draft','Sent','Under Review','Revision Requested','Approved','Declined'];
+const bcSalesMoney=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));
+const bcSalesDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+async function bcLoadSales(){
+ if(!bcSession)return;
+ bcSalesLoading=true;bcSalesError='';render();
+ try{const r=await bcCall('sales_list');bcSales=r.items||[]}
+ catch(e){bcSalesError=e.message}
+ finally{bcSalesLoading=false;render()}
+}
+function bcSalesView(){
+ if(bcSalesSelected){const o=bcSales.find(x=>x.id===bcSalesSelected);if(!o){bcSalesSelected=null;return bcSalesView()}return bcSalesDetail(o)}
+ const open=bcSales.filter(x=>!['Won','Lost'].includes(x.stage)),value=open.reduce((n,x)=>n+Number(x.estimated_value||0),0);
+ return `<div class="heading"><div><h2>Sales Pipeline</h2><p>Track opportunities, customer quotes, revisions and follow-ups.</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadSales()">↻ Refresh</button><button class="btn" onclick="bcSalesEdit()">+ New Opportunity</button></div></div>
+ ${bcSalesError?'<div class="alert">'+esc(bcSalesError)+'</div>':''}
+ <div class="stats"><div class="card"><div class="label">Open Opportunities</div><div class="value">${open.length}</div></div><div class="card"><div class="label">Potential Revenue</div><div class="value">${bcSalesMoney(value)}</div></div><div class="card"><div class="label">Quotes Sent</div><div class="value">${bcSales.filter(x=>x.stage==='Quote Sent').length}</div></div><div class="card"><div class="label">Won Opportunities</div><div class="value">${bcSales.filter(x=>x.stage==='Won').length}</div></div></div>
+ <section class="panel"><h3>Opportunities</h3>${bcSalesLoading?'<p>Loading…</p>':''}<div class="tablewrap"><table><thead><tr><th>Opportunity</th><th>Client</th><th>Stage</th><th>Value</th><th>Follow-Up</th><th></th></tr></thead><tbody>${bcSales.length?bcSales.map(o=>`<tr><td><b>${esc(o.title)}</b></td><td>${esc(o.client_name||'—')}</td><td>${esc(o.stage)}</td><td>${bcSalesMoney(o.estimated_value)}</td><td>${bcSalesDate(o.next_follow_up)}</td><td><button class="btn secondary" onclick="bcSalesOpen('${o.id}')">View</button></td></tr>`).join(''):'<tr><td colspan="6">No opportunities yet. Create the first one to get started.</td></tr>'}</tbody></table></div></section>`;
+}
+function bcSalesDetail(o){
+ const quotes=bcSalesQuotes;
+ return `<div class="heading"><div><button class="btn secondary" onclick="bcSalesSelected=null;render()">← All Opportunities</button><h2 style="margin-top:14px">${esc(o.title)}</h2><p>${esc(o.client_name||'Unassigned client')} · ${esc(o.representative||'No representative')}</p></div><div class="actions"><button class="btn secondary" onclick="bcSalesEdit('${o.id}')">Edit Opportunity</button><button class="btn" onclick="alert('Convert to Job is planned for the Jobs & Projects integration. No job was created.')">Convert to Job</button></div></div>
+ <div class="stats"><div class="card"><div class="label">Opportunity Value</div><div class="value">${bcSalesMoney(o.estimated_value)}</div></div><div class="card"><div class="label">Current Stage</div><div class="value" style="font-size:22px">${esc(o.stage)}</div></div><div class="card"><div class="label">Expected Close</div><div class="value" style="font-size:22px">${bcSalesDate(o.expected_close)}</div></div><div class="card"><div class="label">Quote Versions</div><div class="value">${quotes.length}</div></div></div>
+ <section class="panel" style="margin-bottom:20px"><h3>Sales Progress</h3><div style="display:flex;gap:5px;flex-wrap:wrap">${bcStages.map(x=>`<span style="padding:10px;border-radius:6px;background:${o.stage===x?'#244f84':'#e9edf3'};color:${o.stage===x?'white':'#263a55'};font-size:12px">${esc(x)}</span>`).join('')}</div><p class="notice">Next follow-up: ${bcSalesDate(o.next_follow_up)}</p></section>
+ <div class="twocol"><section class="panel"><div class="heading"><div><h3>Documents & Quotes</h3><p>Secure document history and revisions</p></div><button class="btn" onclick="bcSalesUpload()">+ Upload Quote</button></div>
+ ${quotes.length?quotes.map(q=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 0;border-bottom:1px solid #e4eaf1"><div><b>${esc(q.file_name)}</b><div class="notice">Version ${q.version_number} · ${bcSalesMoney(q.quoted_amount)} · ${bcSalesDate(q.date_sent)} · ${esc(q.status)}</div></div><button class="btn secondary" onclick="bcSalesDownload('${q.id}')">Open</button></div>`).join(''):'<p class="notice">No quotes uploaded yet.</p>'}
+ </section><section class="panel"><h3>Opportunity Information</h3><div class="formgrid"><div><div class="notice">Client</div><b>${esc(o.client_name||'—')}</b></div><div><div class="notice">Contact</div><b>${esc(o.contact_name||'—')}</b></div><div><div class="notice">Representative</div><b>${esc(o.representative||'—')}</b></div><div><div class="notice">Source</div><b>${esc(o.source||'—')}</b></div><div><div class="notice">Next Follow-Up</div><b>${bcSalesDate(o.next_follow_up)}</b></div><div><div class="notice">Stage</div><b>${esc(o.stage)}</b></div></div><h3>Notes</h3><p>${esc(o.notes||'No notes yet.')}</p></section></div>`;
+}
+async function bcSalesOpen(id){bcSalesSelected=id;bcSalesQuotes=[];render();try{const r=await bcCall('sales_quotes',{opportunityId:id});bcSalesQuotes=r.items||[];render()}catch(e){alert('Unable to load quotes: '+e.message)}}
+function bcSalesEdit(id){
+ const o=id?bcSales.find(x=>x.id===id):null;
+ const f=(name,label,type='text')=>`<label>${label}<input name="${name}" type="${type}" ${name==='title'?'required':''} ${type==='number'?'min="0" step="0.01"':''} value="${esc(o?.[name]||'')}"></label>`;
+ const clientOptions='<option value="">No linked client</option>'+bcClients.filter(c=>!c.inactive).map(c=>`<option value="${esc(c.id)}" ${o?.client_item_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+ document.getElementById('modal').innerHTML=`<h3>${o?'Edit':'New'} Opportunity</h3><form id="bcSalesForm"><div class="formgrid">${f('title','Opportunity Name')}<label>Linked Client<select name="client_item_id" id="bcSalesClient">${clientOptions}</select></label>${f('contact_name','Contact Name')}${f('representative','Assigned Representative')}${f('source','Lead Source')}${f('estimated_value','Estimated Value','number')}${f('expected_close','Expected Close Date','date')}${f('next_follow_up','Next Follow-Up','date')}<label>Sales Stage<select name="stage">${bcStages.map(v=>`<option ${o?.stage===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(o?.notes||'')}</textarea></label></div><p id="bcSalesMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Opportunity</button></div></form>`;
+ document.getElementById('bcSalesForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcSalesMsg');btn.disabled=true;msg.textContent='Saving…';try{const v=Object.fromEntries(new FormData(e.target));const client=bcClients.find(c=>c.id===v.client_item_id);v.client_name=client?.name||'';v.client_number=client?.clientNumber||'';if(o)v.id=o.id;const r=await bcCall('sales_save',v);closeModal();await bcLoadSales();if(o)bcSalesSelected=o.id;else bcSalesSelected=r.item.id;await bcSalesOpen(bcSalesSelected)}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+function bcSalesUpload(){
+ if(!bcSalesSelected)return;
+ document.getElementById('modal').innerHTML=`<h3>Upload Quote</h3><p class="notice">Files are stored privately and linked to this opportunity. Maximum 15 MB.</p><form id="bcQuoteForm"><div class="formgrid"><label class="wide">Quote File<input type="file" name="file" accept=".pdf,.doc,.docx,.xls,.xlsx" required></label><label>Quote Amount ($)<input name="quoted_amount" type="number" min="0" step="0.01" required></label><label>Quote Status<select name="status">${bcQuoteStatuses.map(x=>`<option>${x}</option>`).join('')}</select></label><label>Date Sent<input name="date_sent" type="date"></label><label class="wide">Revision Notes<textarea name="notes" rows="3"></textarea></label></div><p class="notice" id="bcQuoteMsg"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Upload Quote</button></div></form>`;
+ document.getElementById('bcQuoteForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcQuoteMsg'),file=e.target.elements.file.files[0];if(!file)return;if(file.size>15*1024*1024){msg.textContent='Maximum file size is 15 MB';return}btn.disabled=true;msg.textContent='Uploading securely…';try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file)});const v=Object.fromEntries(new FormData(e.target));delete v.file;await bcCall('sales_upload',{...v,opportunityId:bcSalesSelected,fileName:file.name,mime:file.type,base64:data});closeModal();await bcSalesOpen(bcSalesSelected)}catch(err){msg.textContent='Upload failed: '+err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+async function bcSalesDownload(quoteId){try{const r=await bcCall('sales_quote_url',{quoteId});window.open(r.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open quote: '+e.message)}}
+const bcSalesPriorRender=render;
+render=function(){bcSalesPriorRender();if(page==='deals'&&bcSession)document.getElementById('view').innerHTML=bcSalesView()};
+const bcSalesPriorNavigate=navigate;
+navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession)bcLoadSales()};
+if(bcSession&&page==='deals')bcLoadSales();
+</script>
 </body></html>
