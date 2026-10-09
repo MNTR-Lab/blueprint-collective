@@ -225,4 +225,64 @@ clientManagement=function(){
  </section>`;
 };
 </script>
+
+<script>
+/* Live contact directory, linked to verified client records */
+let bcContacts=[],bcContactsLoaded=false,bcContactsLoading=false,bcContactsError='';
+const bcBaseLoad=bcLoad;
+bcLoad=async function(){
+ await bcBaseLoad();
+ if(bcSession)await bcLoadContacts();
+};
+function bcContactCol(item,id){return(item.column_values||[]).find(x=>x.id===id)?.text||''}
+function bcContactValue(item,id){const c=(item.column_values||[]).find(x=>x.id===id);try{return JSON.parse(c?.value||'null')}catch{return null}}
+function bcContactConvert(item){return{id:String(item.id),name:item.name,
+ clientNumber:bcContactCol(item,'text_mm7zy7k0'),clientId:bcContactCol(item,'text_mm7z5k5x'),
+ company:bcContactCol(item,'text_mm7zbtdm'),title:bcContactCol(item,'text_mm7zwtx2'),
+ email:bcContactCol(item,'email_mm7zfbk8'),phone:bcContactCol(item,'phone_mm7zyfzm'),
+ primary:bcContactValue(item,'boolean_mm7zkts3')?.checked===true||bcContactCol(item,'boolean_mm7zkts3').toLowerCase()==='v',
+ notes:bcContactCol(item,'long_text_mm7z8r9c')}}
+async function bcLoadContacts(){
+ if(!bcSession)return;
+ bcContactsLoading=true;bcContactsError='';render();
+ try{const d=await bcCall('contacts_list');bcContacts=(d.items||[]).map(bcContactConvert);bcContactsLoaded=true}
+ catch(e){bcContactsError=e.message;bcContactsLoaded=false}
+ finally{bcContactsLoading=false;render()}
+}
+function bcContactsView(){
+ const rows=bcContacts.slice().sort((a,b)=>a.name.localeCompare(b.name));
+ return `<div class="heading"><div><h2>Clients</h2><p>Live MNTR+ Database contact directory</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadContacts()">↻ Refresh</button><button class="btn" onclick="bcOpenContact()">+ Add Contact</button></div></div>
+ <div class="toolbar">${[['active','Active Clients',bcClients.filter(x=>!x.inactive).length],['inactive','Inactive Clients',bcClients.filter(x=>x.inactive).length],['contacts','Contacts',bcContacts.length]].map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>
+ ${bcContactsError?`<div class="alert">${esc(bcContactsError)}</div>`:''}
+ ${bcContactsLoading?'<p class="notice">Loading contacts…</p>':''}
+ <section class="panel"><div class="heading"><div><h3>Contacts</h3><p>People linked to your client records</p></div></div>
+ <div class="tablewrap"><table><thead><tr><th>Name</th><th>Company</th><th>Client Number</th><th>Job Title</th><th>Email</th><th>Phone</th><th>Primary</th><th></th></tr></thead><tbody>
+ ${rows.length?rows.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.company)}</td><td>${esc(c.clientNumber)}</td><td>${esc(c.title)}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${c.primary?'Yes':'—'}</td><td><button class="btn secondary" onclick="bcOpenContact('${esc(c.id)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No contacts have been added yet.</td></tr>'}
+ </tbody></table></div></section>`;
+}
+function bcOpenContact(id){
+ const c=id?bcContacts.find(x=>x.id===String(id)):null;
+ if(id&&!c){alert('Contact not found. Refresh and try again.');return}
+ if(!bcClients.length){alert('Create a client first, then add its contacts.');return}
+ const opts=bcClients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<option value="${esc(x.id)}" ${String(c?.clientId||'')===String(x.id)?'selected':''}>${esc(x.name)} (${esc(x.clientNumber)})</option>`).join('');
+ document.getElementById('modal').innerHTML=`<h3>${c?'Edit Contact':'Add Contact'}</h3><p class="notice">Contacts are linked to the selected client in the MNTR+ Database.</p><form id="bcContactForm"><div class="formgrid">
+ <label class="wide">Client / Company<select name="clientId" required><option value="">Select client</option>${opts}</select></label>
+ ${[['name','Contact Name',true],['title','Job Title',false],['email','Email',false],['phone','Phone',false]].map(([key,label,req])=>`<label>${label}<input name="${key}" ${key==='email'?'type="email"':''} value="${esc(c?.[key]||'')}" ${req?'required':''}></label>`).join('')}
+ <label class="wide" style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="primary" ${c?.primary?'checked':''}> Primary Contact</label>
+ <label class="wide">Notes<textarea name="notes" rows="3">${esc(c?.notes||'')}</textarea></label>
+ </div><p id="bcContactError" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">${c?'Save Contact Changes':'Create Contact in Database'}</button></div></form>`;
+ document.getElementById('bcContactForm').onsubmit=async e=>{
+ e.preventDefault();const btn=e.target.querySelector('button[type=submit]'),msg=document.getElementById('bcContactError');btn.disabled=true;msg.textContent='Saving contact…';
+ try{const vals=Object.fromEntries(new FormData(e.target));vals.primary=e.target.elements.primary.checked;
+ await bcCall(c?'contacts_update':'contacts_create',c?{id:c.id,...vals}:vals);
+ closeModal();await bcLoadContacts();if(bcContactsError)alert('Saved, but refreshing contacts failed: '+bcContactsError);
+ }catch(err){msg.textContent='Unable to save: '+err.message}
+ finally{btn.disabled=false}
+ };
+ document.getElementById('modalbg').classList.add('show');
+}
+const bcContactsOriginalManagement=clientManagement;
+clientManagement=function(){if(bcSession&&clientTab==='contacts')return bcContactsView();return bcContactsOriginalManagement()};
+if(bcSession)bcLoadContacts();
+</script>
 </body></html>
