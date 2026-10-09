@@ -285,4 +285,29 @@ const bcContactsOriginalManagement=clientManagement;
 clientManagement=function(){if(bcSession&&clientTab==='contacts')return bcContactsView();return bcContactsOriginalManagement()};
 if(bcSession)bcLoadContacts();
 </script>
+
+<script>
+let bcLeads=[],bcLeadsError='',bcLeadsLoading=false,bcLeadSearch='',bcLeadStatus='All';
+const bcLeadStatuses=['New','Contacted','Qualified','Proposal Sent','Won','Lost'];
+function bcLeadCol(item,id){return(item.column_values||[]).find(c=>c.id===id)?.text||''}
+function bcLeadConvert(x){return{id:String(x.id),name:x.name,contact:bcLeadCol(x,'text_mm7z6xwp'),email:bcLeadCol(x,'email_mm7zqcz7'),phone:bcLeadCol(x,'phone_mm7zytyq'),status:bcLeadCol(x,'color_mm7zqvy7')||'New',source:bcLeadCol(x,'text_mm7z89gz'),type:bcLeadCol(x,'text_mm7z4y0h'),rep:bcLeadCol(x,'text_mm7z6nvy'),follow:bcLeadCol(x,'date_mm7z4fz0'),value:bcLeadCol(x,'numeric_mm7znksy'),notes:bcLeadCol(x,'long_text_mm7zrbr1')}}
+async function bcLoadLeads(){if(!bcSession)return;bcLeadsLoading=true;bcLeadsError='';render();try{const d=await bcCall('leads_list');bcLeads=(d.items||[]).map(bcLeadConvert)}catch(e){bcLeadsError=e.message}finally{bcLeadsLoading=false;render()}}
+function bcLeadRows(){const q=bcLeadSearch.trim().toLowerCase();return bcLeads.filter(x=>(bcLeadStatus==='All'||x.status===bcLeadStatus)&&(!q||[x.name,x.contact,x.email,x.phone,x.rep,x.source].some(v=>String(v||'').toLowerCase().includes(q)))).sort((a,b)=>a.name.localeCompare(b.name))}
+function bcLeadTable(){const rows=bcLeadRows();return '<p class="notice">Showing '+rows.length+' of '+bcLeads.length+' leads</p><div class="tablewrap"><table><thead><tr><th>Company / Lead</th><th>Contact</th><th>Email</th><th>Status</th><th>Representative</th><th>Follow-up</th><th>Est. Value</th><th>Actions</th></tr></thead><tbody>'+(rows.length?rows.map(x=>'<tr><td><b>'+esc(x.name)+'</b></td><td>'+esc(x.contact)+'</td><td>'+esc(x.email)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.rep)+'</td><td>'+esc(x.follow)+'</td><td>'+esc(x.value)+'</td><td><button class="btn secondary" onclick="bcOpenLead(\''+esc(x.id)+'\')">Edit</button></td></tr>').join(''):'<tr><td colspan="8">No leads match these filters.</td></tr>')+'</tbody></table></div>'}
+function bcLeadsView(){return '<div class="heading"><div><h2>Leads</h2><p>Live MNTR+ Database lead pipeline</p></div><div class="actions"><button class="btn secondary" onclick="bcLoadLeads()">↻ Refresh</button><button class="btn" onclick="bcOpenLead()">+ New Lead</button></div></div>'+(bcLeadsError?'<div class="alert">'+esc(bcLeadsError)+'</div>':'')+(bcLeadsLoading?'<p class="notice">Loading leads…</p>':'')+'<section class="panel"><div class="formgrid"><label class="wide">Search leads<input type="search" placeholder="Company, contact, email, representative…" value="'+esc(bcLeadSearch)+'" oninput="bcLeadSearch=this.value;bcLeadRefreshRows()"></label><label>Lead Status<select onchange="bcLeadStatus=this.value;bcLeadRefreshRows()">'+['All',...bcLeadStatuses].map(x=>'<option '+(bcLeadStatus===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label></div><div id="bcLeadTable">'+bcLeadTable()+'</div></section>'}
+function bcLeadRefreshRows(){const el=document.getElementById('bcLeadTable');if(el)el.innerHTML=bcLeadTable()}
+function bcOpenLead(id){
+ const x=id?bcLeads.find(l=>l.id===String(id)):null;if(id&&!x)return alert('Lead not found. Refresh and try again.');
+ const fields=[['name','Company / Lead Name','text'],['contact','Contact Name','text'],['email','Email','email'],['phone','Phone','tel'],['source','Lead Source','text'],['type','Customer Type','text'],['rep','Assigned Representative','text'],['follow','Next Follow-Up','date'],['value','Estimated Value','number']];
+ const inputs=fields.map(([k,label,type])=>'<label>'+label+'<input name="'+k+'" type="'+type+'" '+(k==='name'?'required ':'')+(k==='value'?'min="0" step="0.01" ':'')+'value="'+esc(x?.[k]||'')+'"></label>').join('');
+ document.getElementById('modal').innerHTML='<h3>'+(x?'Edit Lead':'New Lead')+'</h3><p class="notice">Lead records are saved to the live MNTR+ Database.</p><form id="bcLeadForm"><div class="formgrid">'+inputs+'<label>Lead Status<select name="status">'+bcLeadStatuses.map(v=>'<option '+((x?.status||'New')===v?'selected':'')+'>'+v+'</option>').join('')+'</select></label><label class="wide">Notes<textarea name="notes" rows="3">'+esc(x?.notes||'')+'</textarea></label></div><p id="bcLeadFormError" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">'+(x?'Save Lead Changes':'Create Lead in Database')+'</button></div></form>';
+ document.getElementById('bcLeadForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcLeadFormError');btn.disabled=true;msg.textContent='Saving lead…';try{const v=Object.fromEntries(new FormData(e.target));await bcCall(x?'leads_update':'leads_create',x?{id:x.id,...v}:v);closeModal();await bcLoadLeads()}catch(err){msg.textContent='Unable to save: '+err.message}finally{btn.disabled=false}};
+ document.getElementById('modalbg').classList.add('show');
+}
+const bcOriginalRender=render;
+render=function(){bcOriginalRender();if(page==='leads'&&bcSession)document.getElementById('view').innerHTML=bcLeadsView()};
+const bcOriginalNavigate=navigate;
+navigate=function(p){bcOriginalNavigate(p);if(p==='leads'&&bcSession)bcLoadLeads()};
+if(bcSession&&page==='leads')bcLoadLeads();
+</script>
 </body></html>
