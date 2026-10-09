@@ -506,13 +506,36 @@ async function bcOpenTaskJob(jobId){
  page='jobs';bcJobSelected=null;render();await bcLoadJobs();await bcJobOpen(jobId);
 }
 
+const BC_EMPLOYEE_FN=BC_URL+'/functions/v1/blueprint-employee';
+async function bcEmployeeCall(action,extra={}){
+ if(!bcSession?.access_token)throw Error('Please sign in again.');
+ if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60){if(!await bcRefreshSession())throw Error('Session expired. Please sign in again.');}
+ const r=await fetch(BC_EMPLOYEE_FN,{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify({action,...extra})});
+ const data=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(data.error||'Employee invitation failed');
+ return data;
+}
+async function bcInviteEmployee(id){
+ const x=bcStaff.find(v=>v.id===id);
+ if(!x||!x.active||!x.email||x.user_id)return;
+ if(!confirm(`Send an employee login invitation to ${x.display_name} at ${x.email}?`))return;
+ const btn=document.getElementById('bcInviteBtn_'+id),msg=document.getElementById('bcJobMsg');
+ if(btn)btn.disabled=true;
+ if(msg)msg.textContent='Sending invitation…';
+ try{
+  await bcEmployeeCall('invite',{staffId:id});
+  const result=await bcCall('staff_list');bcStaff=result.items||[];
+  bcStaffDirectory();
+  const notice=document.getElementById('bcJobMsg');if(notice)notice.textContent='Invitation sent to '+x.email+'. The employee must accept the email invitation to sign in.';
+ }catch(e){if(msg)msg.textContent='Unable to send invitation: '+e.message;if(btn)btn.disabled=false;}
+}
 function bcStaffDirectory(){
- const rows=bcStaff.map(x=>`<tr><td><strong>${esc(x.display_name)}</strong><small>${esc(x.email||'No email')}</small></td><td>${esc(x.role)}</td><td>${x.active?'Active':'Inactive'}</td><td><button class="btn secondary" type="button" onclick="bcStaffForm('${x.id}')">Edit</button></td></tr>`).join('');
- bcJobModal(`<div class="bc-directory-heading"><h3>Team Directory</h3><p class="notice">Manage employee profiles for task assignments. Profiles do not grant login access.</p></div><div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="bc-task-empty">No employees added yet.</td></tr>'}</tbody></table></div><form id="bcJobForm"><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Close</button><button class="btn" type="button" onclick="bcStaffForm()">+ Add Employee</button></div></form>`,async()=>{});
+ const rows=bcStaff.map(x=>`<tr><td><strong>${esc(x.display_name)}</strong><small>${esc(x.email||'No email')}</small></td><td>${esc(x.role)}</td><td>${x.active?'Active':'Inactive'}</td><td><span class="notice">${x.user_id?'Invited / linked':!x.active?'Inactive':!x.email?'Email needed':'Not invited'}</span></td><td><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="bcStaffForm('${x.id}')">Edit</button>${x.active&&x.email&&!x.user_id?`<button class="btn" type="button" id="bcInviteBtn_${x.id}" onclick="bcInviteEmployee('${x.id}')">Send Invitation</button>`:''}</div></td></tr>`).join('');
+ bcJobModal(`<div class="bc-directory-heading"><h3>Team Directory</h3><p class="notice">Manage employees and send secure sign-in invitations. Invitations give employees access only to their assigned tasks.</p></div><div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th>Login</th><th>Actions</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="bc-task-empty">No employees added yet.</td></tr>'}</tbody></table></div><form id="bcJobForm"><p id="bcJobMsg" class="notice" role="status"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Close</button><button class="btn" type="button" onclick="bcStaffForm()">+ Add Employee</button></div></form>`,async()=>{});
 }
 function bcStaffForm(id=''){
  const x=bcStaff.find(v=>v.id===id)||{};
- bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Employee directory only — login invitations will be configured separately.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
+ bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Manage this employee profile. To send a login invitation, save an active employee with an email address, then return to Team Directory.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
 }
 function bcAssignTask(jobId,taskId){
  const t=bcAllTasks.find(v=>v.id===taskId);if(!t)return;
