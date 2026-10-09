@@ -378,7 +378,7 @@ function bcSalesEdit(id){
    if(!Array.from(contactSelect.options).some(x=>x.value===o.contact_name))contactSelect.add(new Option(o.contact_name,o.contact_name));
    contactSelect.value=o.contact_name;
  }
- document.getElementById('bcSalesForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcSalesMsg');btn.disabled=true;msg.textContent='Saving…';try{const v=Object.fromEntries(new FormData(e.target));const client=bcClients.find(c=>c.id===v.client_item_id);v.client_name=client?.name||'';v.client_number=client?.clientNumber||'';if(o)v.id=o.id;const r=await bcCall('sales_save',v);closeModal();await bcLoadSales();if(o)bcSalesSelected=o.id;else bcSalesSelected=r.item.id;await bcSalesOpen(bcSalesSelected)}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
+ document.getElementById('bcSalesForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]'),msg=document.getElementById('bcSalesMsg');btn.disabled=true;msg.textContent='Saving…';try{const v=Object.fromEntries(new FormData(e.target));const client=bcClients.find(c=>c.id===v.client_item_id);v.client_name=client?.name||'';v.client_number=client?.clientNumber||'';if(o)v.id=o.id;const r=await bcCall('sales_save',v);closeModal();await bcLoadSales();if(o)bcSalesSelected=o.id;else bcSalesSelected=r.item.id;await bcSalesOpen(bcSalesSelected);if(v.stage==='Quote Sent')bcSalesUpload()}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
  document.getElementById('modalbg').classList.add('show');
 }
 function bcSalesUpload(){
