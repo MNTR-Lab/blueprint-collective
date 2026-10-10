@@ -1044,5 +1044,42 @@ bcInboxLayout=function(){
  return html;
 };
 
+
+/* Client Communication History — all client-matched inbound and outbound correspondence.
+   Matching uses the client's primary email address; ambiguous addresses are not assigned. */
+function bcOpenClientHistory(id){
+ const client=bcClients.find(c=>String(c.id)===String(id));
+ if(!client)return;
+ bcInboxClientFilter=String(client.id);
+ bcConversationSelected='';
+ bcMailTab='conversations';
+ navigate('email');
+ // Refresh both directions so client history is current, even if Inbox was not visited.
+ bcLoadInbox();
+ bcLoadSent();
+}
+const bcClientRowsBeforeHistory=bcClientRows;
+bcClientRows=function(items){
+ const html=bcClientRowsBeforeHistory(items);
+ return html.replace(/(<button class="btn secondary" onclick="bcShowClientEmails\('([^']+)'\)">View Emails<\/button>)/g,
+  (_,button,id)=>button+' <button class="btn secondary" onclick="bcOpenClientHistory(\''+id+'\')">History</button>');
+};
+const bcInboxLayoutBeforeClientHistory=bcInboxLayout;
+bcInboxLayout=function(){
+ let html=bcInboxLayoutBeforeClientHistory();
+ if(bcMailTab!=='conversations'||!bcInboxClientFilter)return html;
+ const client=bcClients.find(c=>String(c.id)===String(bcInboxClientFilter));
+ if(!client)return html;
+ const received=bcInboxVisibleMessages().length;
+ const outgoing=bcSentMessages.filter(m=>String(m.client_link_id||'')===String(client.id)||String(bcOutgoingClient(m)?.id||'')===String(client.id)).length;
+ const email=bcClientEmailAddress(client.email);
+ const summary='<div class="panel" style="margin-bottom:14px"><h3>Communication History: '+bcInboxEscape(client.name||'Client')+'</h3>'+
+  '<p class="muted">Primary contact: '+bcInboxEscape(email||'No email address')+' · '+received+' received · '+outgoing+' sent</p>'+
+  '<p class="muted">Messages are matched by the client primary email address or an existing outgoing client reference. Emails from other addresses are not automatically assigned.</p>'+
+  '<div class="actions"><button class="btn" onclick="bcOpenCompose(\''+bcInboxEscape(email)+'\',\'\',\'\','+JSON.stringify(String(client.id))+')" '+(!email?'disabled':'')+'>Email Client</button> <button class="btn secondary" onclick="bcInboxClientFilter=null;bcConversationSelected=\'\';render()">All Conversations</button></div></div>';
+ const section=html.indexOf('<section class="panel">');
+ return section<0?html:html.slice(0,section)+summary+html.slice(section);
+};
+
 </script>
 </body></html>
