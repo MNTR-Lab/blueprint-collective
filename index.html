@@ -1129,33 +1129,33 @@ bcOpenInboxMessage=function(id){bcEmailLinkFeedback='';bcOpenInboxMessageBeforeL
 
 
 /* Blueprint Collective Jobs & Projects: Blueprint is the sole editing interface. */
-let bcJobs=[],bcJobsBusy=false,bcJobsError='',bcJobClientFilter='',bcJobEditing='',bcJobFormOpen=false,bcJobsLoaded=false;
-const bcJobStatuses=['New','In Progress','Awaiting Approval','Completed','Closed'];
+let bcCoreJobs=[],bcJobsBusy=false,bcJobsError='',bcJobClientFilter='',bcJobEditing='',bcJobFormOpen=false,bcJobsLoaded=false;
+const bcCoreJobStatuses=['New','In Progress','Awaiting Approval','Completed','Closed'];
 async function bcJobsRequest(payload){
  if(!bcSession?.access_token)throw Error('Please log in again');
  if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60)await bcRefreshSession();
  const r=await fetch(BC_URL+'/functions/v1/blueprint-jobs',{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify(payload)});
  const j=await r.json();if(!r.ok)throw Error(j.error||'Unable to save job');return j;
 }
-async function bcLoadJobs(){bcJobsBusy=true;bcJobsError='';if(page==='jobs')render();try{const j=await bcJobsRequest({action:'list'});bcJobs=j.jobs||[];bcJobsLoaded=true;}catch(e){bcJobsError=e.message||String(e)}finally{bcJobsBusy=false;if(page==='jobs')render()}}
-function bcOpenJobs(clientId){bcJobClientFilter=clientId?String(clientId):'';bcJobEditing='';bcJobFormOpen=!!clientId;navigate('jobs');bcLoadJobs()}
-function bcJobEdit(id){bcJobEditing=id;bcJobFormOpen=true;render()}
+async function bcCoreLoadJobs(){bcJobsBusy=true;bcJobsError='';if(page==='jobs')render();try{const j=await bcJobsRequest({action:'list'});bcCoreJobs=j.jobs||[];bcJobsLoaded=true;}catch(e){bcJobsError=e.message||String(e)}finally{bcJobsBusy=false;if(page==='jobs')render()}}
+function bcCoreOpenJobs(clientId){bcJobClientFilter=clientId?String(clientId):'';bcJobEditing='';bcJobFormOpen=!!clientId;navigate('jobs');bcCoreLoadJobs()}
+function bcCoreJobEdit(id){bcJobEditing=id;bcJobFormOpen=true;render()}
 function bcJobNew(){bcJobEditing='';bcJobFormOpen=true;render()}
 function bcJobCancel(){bcJobEditing='';bcJobFormOpen=false;render()}
 async function bcJobSubmit(e){
  e.preventDefault();const f=e.currentTarget;const submit=f.querySelector('[type=submit]');if(submit)submit.disabled=true;
- const editing=bcJobs.find(x=>x.id===bcJobEditing);const client=bcClients.find(x=>String(x.id)===String(f.elements.clientId?.value||''));
+ const editing=bcCoreJobs.find(x=>x.id===bcJobEditing);const client=bcClients.find(x=>String(x.id)===String(f.elements.clientId?.value||''));
  const payload={action:editing?'update':'create',title:f.elements.title.value.trim(),description:f.elements.description.value.trim(),dueDate:f.elements.dueDate.value||null};
  if(editing){payload.id=editing.id;payload.status=f.elements.status.value;payload.due_date=payload.dueDate;delete payload.dueDate;}
  else{if(!client){alert('Choose a client first.');if(submit)submit.disabled=false;return;}payload.clientId=String(client.id);payload.clientName=client.name;}
- try{await bcJobsRequest(payload);bcJobFormOpen=false;bcJobEditing='';await bcLoadJobs();}catch(err){alert(err.message||'Unable to save job');if(submit)submit.disabled=false;}
+ try{await bcJobsRequest(payload);bcJobFormOpen=false;bcJobEditing='';await bcCoreLoadJobs();}catch(err){alert(err.message||'Unable to save job');if(submit)submit.disabled=false;}
 }
 function bcJobsPage(){
  const client=bcClients.find(c=>String(c.id)===bcJobClientFilter);
- const list=bcJobs.filter(j=>!bcJobClientFilter||String(j.client_external_id)===bcJobClientFilter);
- const editing=bcJobs.find(j=>j.id===bcJobEditing);
+ const list=bcCoreJobs.filter(j=>!bcJobClientFilter||String(j.client_external_id)===bcJobClientFilter);
+ const editing=bcCoreJobs.find(j=>j.id===bcJobEditing);
  const opt=bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===String(editing?.client_external_id||bcJobClientFilter)?'selected':'')+'>'+esc(c.name)+'</option>').join('');
- const statuses=bcJobStatuses.map(st=>'<option value="'+esc(st)+'" '+(editing?.status===st?'selected':'')+'>'+esc(st)+'</option>').join('');
+ const statuses=bcCoreJobStatuses.map(st=>'<option value="'+esc(st)+'" '+(editing?.status===st?'selected':'')+'>'+esc(st)+'</option>').join('');
  const form=bcJobFormOpen?'<section class="panel" style="margin:14px 0"><h3>'+(editing?'Edit Job':'Create New Job')+'</h3><form onsubmit="bcJobSubmit(event)" style="display:grid;gap:12px;max-width:720px">'+
  '<label>Client<select name="clientId" required '+(editing?'disabled':'')+' style="width:100%;padding:10px"><option value="">Select a client</option>'+opt+'</select></label>'+
  '<label>Job Title<input name="title" required maxlength="200" style="width:100%;padding:10px" value="'+esc(editing?.title||'')+'"></label>'+
@@ -1163,19 +1163,19 @@ function bcJobsPage(){
  '<label>Due Date<input name="dueDate" type="date" style="width:100%;padding:10px" value="'+esc(editing?.due_date||'')+'"></label>'+
  (editing?'<label>Status<select name="status" style="width:100%;padding:10px">'+statuses+'</select></label>':'<p class="muted">New jobs start with status: New</p>')+
  '<div><button class="btn" type="submit">'+(editing?'Save Job Changes':'Create Job')+'</button> <button class="btn secondary" type="button" onclick="bcJobCancel()">Cancel</button></div></form></section>':'';
- const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b></td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Monday.com synchronization is not yet activated">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcJobEdit(\''+esc(j.id)+'\')">Edit</button></td></tr>').join('');
- return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
+ const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b></td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Monday.com synchronization is not yet activated">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit</button></td></tr>').join('');
+ return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcCoreLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
  '<section class="panel"><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
  '<p class="muted">'+list.length+' job(s)'+(client?' for '+esc(client.name):'')+' · Jobs are saved in Blueprint Collective. Monday.com sync is pending activation.</p></section>'+
  (bcJobsError?'<div class="alert">'+esc(bcJobsError)+'</div>':'')+form+
  '<section class="panel"><div class="tablewrap"><table><thead><tr><th>Job #</th><th>Job</th><th>Client</th><th>Status</th><th>Due</th><th>Monday Sync</th><th></th></tr></thead><tbody>'+(bcJobsBusy?'<tr><td colspan="7">Loading jobs…</td></tr>':rows||'<tr><td colspan="7">No jobs yet. Select New Job to create the first one.</td></tr>')+'</tbody></table></div></section>';
 }
 const bcRenderBeforeJobs=render;
-render=function(){bcRenderBeforeJobs();if(page==='jobs'&&bcSession){const view=document.getElementById('view');if(view)view.innerHTML=bcJobsPage();}};
+render=function(){bcRenderBeforeJobs();if(page==='jobs'){const view=document.getElementById('view');if(view)view.innerHTML=bcSession?bcJobsPage():'<section class="panel"><h2>Jobs & Projects</h2><p>Connecting to your selected Blueprint Collective workspace…</p></section>';}};
 const bcNavigateBeforeJobs=navigate;
-navigate=function(p){bcNavigateBeforeJobs(p);if(p==='jobs'&&!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcLoadJobs();};
+navigate=function(p){bcNavigateBeforeJobs(p);if(p==='jobs'&&!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs();};
 const bcClientRowsBeforeJobs=bcClientRows;
-bcClientRows=function(items){const html=bcClientRowsBeforeJobs(items);return html.replace(/(<button class="btn secondary" onclick="bcOpenClientHistory\('([^']+)'\)">History<\/button>)/g,(_,button,id)=>button+' <button class="btn secondary" onclick="bcOpenJobs(\''+id+'\')">Jobs</button>');};
+bcClientRows=function(items){const html=bcClientRowsBeforeJobs(items);return html.replace(/(<button class="btn secondary" onclick="bcOpenClientHistory\('([^']+)'\)">History<\/button>)/g,(_,button,id)=>button+' <button class="btn secondary" onclick="bcCoreOpenJobs(\''+id+'\')">Jobs</button>');};
 
 </script>
 </body></html>
