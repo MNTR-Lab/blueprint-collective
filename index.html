@@ -423,21 +423,29 @@ function bcJobStatusSelect(j){
  return `<select class="bc-job-status-select" aria-label="Job status for ${esc(j.title)}" onchange="bcJobQuickStatus('${j.id}',this)" title="Change job status">${bcJobStatuses.map(status=>`<option value="${esc(status)}" ${j.job_status===status?'selected':''}>${esc(status)}</option>`).join('')}</select>`;
 }
 async function bcJobQuickStatus(jobId,select){
- const job=bcJobs.find(j=>String(j.id)===String(jobId));
- if(!job||!select||select.value===job.job_status)return;
- const previous=job.job_status, next=select.value;
- select.disabled=true;
- try{
-  await bcCall('job_update',{jobId,job_status:next});
-  job.job_status=next;
-  await bcLoadJobs();
- }catch(error){
-  job.job_status=previous;
-  select.value=previous;
-  alert('Unable to update job status: '+error.message);
-  render();
- }finally{select.disabled=false}
+  const job=bcJobs.find(j=>String(j.id)===String(jobId));
+  if(!job||!select||select.value===job.job_status)return;
+  const previous=job.job_status,next=select.value;
+  select.disabled=true;
+  try{
+    // The job_update endpoint expects the complete editable job configuration,
+    // just as the working Edit Job Details form supplies it.
+    const fields=['job_type','priority','assigned_to','start_date','due_date','description','internal_notes'];
+    const values=Object.fromEntries(fields.map(key=>[key,job[key]??'']));
+    // Edit Job Details defaults these two select fields when missing.
+    if(!values.job_type||!bcJobTypes.includes(values.job_type))values.job_type=bcJobTypes[0];
+    if(!values.priority||!bcJobPriorities.includes(values.priority))values.priority=bcJobPriorities[1];
+    await bcCall('job_update',{jobId,job_status:next,...values});
+    job.job_status=next;
+    await bcLoadJobs();
+  }catch(error){
+    job.job_status=previous;
+    select.value=previous;
+    alert('Unable to update job status: '+error.message);
+    render();
+  }finally{select.disabled=false}
 }
+
 const bcJobStatusStyle=document.createElement('style');
 bcJobStatusStyle.textContent=`
 .bc-job-status-select{width:100%;min-width:145px;max-width:225px;border:1px solid #ccd9e7;border-radius:9px;background:#fff;color:#1c3b5b;padding:10px 32px 10px 11px;font-size:13px;font-weight:700;cursor:pointer;outline:none}
