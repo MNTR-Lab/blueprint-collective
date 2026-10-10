@@ -746,13 +746,7 @@ const bcNotesJobDetail=bcJobDetail;
 bcJobDetail=function(j){return bcNotesJobDetail(j).replace(/(<select\b[^>]*\bonchange="bcJobTaskStatus\('([^']+)',this.value(?:,this)?\)"[^>]*>)/g,(match,whole,taskId)=>'<button class="btn secondary" style="margin:8px" onclick="bcTaskNotesOpen(\''+taskId+'\')">Task Notes</button>'+whole)};
 </script><script>
 /* Administrator notification review — read-only inbox with explicit refresh. */
-async function bcOpenNotificationCenter(){
- const modal=document.getElementById('modal');document.getElementById('modalbg').classList.add('show');
- modal.innerHTML='<h3>Employee Notifications</h3><p class="notice">Recent assignment, task status and task note notifications across the workspace.</p><div id="bcNotificationList">Loading…</div><div class="actions"><button class="btn secondary" onclick="closeModal()">Close</button></div>';
- try{const r=await bcCall('notifications_list');document.getElementById('bcNotificationList').innerHTML=(r.items||[]).map(n=>'<div style="border-bottom:1px solid #e1e8f0;padding:10px 0"><b>'+esc(n.title)+'</b> <small>'+esc(new Date(n.created_at).toLocaleString())+'</small><div style="margin:5px 0;white-space:pre-wrap">'+esc(n.message)+'</div><small>'+esc(n.read_at?'Read':'Unread')+'</small></div>').join('')||'<p class="notice">No notifications yet.</p>'}catch(e){document.getElementById('bcNotificationList').textContent=e.message}
-}
-(function(){const b=document.createElement('button');b.type='button';b.textContent='Employee Notifications';b.className='btn secondary';b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:3;box-shadow:0 5px 20px #0002';b.onclick=bcOpenNotificationCenter;document.body.appendChild(b)})();
-</script><script>
+async </script><script>
 function bcInternalUI(api,container,adminMode){
  const escMsg=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const btn=adminMode?'btn secondary':'secondary';
@@ -772,23 +766,18 @@ function bcInternalUI(api,container,adminMode){
 
 const bcMessagesAdmin=bcInternalUI((action,payload)=>bcCall(action,payload),'bcInternalMessages',true);
 function bcOpenInternalMessages(){document.getElementById('modal').innerHTML='<div style="text-align:right"><button class="btn secondary" onclick="closeModal()">Close</button></div><div id="bcInternalMessages"></div>';document.getElementById('modalbg').classList.add('show');bcMessagesAdmin.list()}
-(function(){const b=document.createElement('button');b.type='button';b.className='btn secondary';b.textContent='Internal Messages';b.style.cssText='position:fixed;right:18px;bottom:72px;z-index:3;box-shadow:0 5px 20px #0002';b.onclick=bcOpenInternalMessages;document.body.appendChild(b)})();
+(function(){const b=document.createElement('button');b.type='button';b.className='btn secondary';b.textContent='Internal Messages';b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:3;box-shadow:0 5px 20px #0002';b.onclick=bcOpenInternalMessages;document.body.appendChild(b)})();
 </script><script>
 (function(){
 async function updateUnreadIndicators(){
  const buttons=[...document.querySelectorAll('button')];
  const msg=buttons.find(b=>b.textContent.startsWith('Internal Messages')&&!b.closest('#modal'));
- const notif=buttons.find(b=>b.textContent.startsWith('Employee Notifications')&&!b.closest('#modal'));
  try{
   const result=await bcCall('internal_list');
   const count=(result.items||[]).filter(t=>t.unread).length;
   if(msg){msg.classList.toggle('bc-unread-alert',count>0);msg.classList.toggle('bc-unread-alert-pulse',count>0);msg.textContent='Internal Messages'+(count?' ('+count+' NEW)':'');}
  }catch(e){console.warn('Messages alert:',e)}
- try{
-  const result=await bcCall('notifications_list');
-  const count=Number(result.unread)||((result.items||[]).filter(n=>!n.read_at).length);
-  if(notif){notif.classList.toggle('bc-unread-alert',count>0);notif.textContent='Employee Notifications'+(count?' ('+count+' unread)':'');}
- }catch(e){console.warn('Notifications alert:',e)}
+
 }
 window.bcUpdateUnreadIndicators=updateUnreadIndicators;
 setTimeout(updateUnreadIndicators,1000);
