@@ -1003,5 +1003,46 @@ bcInboxDetail=function(m){return bcIncomingDetailOriginal(m)+(m?`<p style="margi
 const bcPreviousClientMailOpen=bcShowClientEmails;
 bcShowClientEmails=function(id){bcMailTab='inbox';bcPreviousClientMailOpen(id);};
 
+
+/* Conversation history: groups received and sent correspondence by correspondent and normalized subject.
+   This is a subject-based view; RFC Message-ID threading can be added separately. */
+let bcConversationSelected='';
+function bcConversationSubject(subject){return String(subject||'(No subject)').replace(/^(?:(?:re|fw|fwd)\s*:\s*)+/ig,'').trim().toLowerCase()||'(no subject)';}
+function bcConversationGroups(){
+ const messages=[];
+ for(const m of bcInboxVisibleMessages())messages.push({kind:'received',id:m.id,when:m.received_at,other:bcClientEmailAddress(m.sender),subject:m.subject||'',message:m});
+ for(const m of bcSentMessages){
+  if(bcInboxClientFilter){const c=bcClients.find(x=>String(x.id)===bcInboxClientFilter);if(!c||!(String(m.client_link_id||'')===String(c.id)||bcClientEmailAddress(m.recipient)===bcClientEmailAddress(c.email)))continue;}
+  messages.push({kind:'sent',id:m.id,when:m.sent_at||m.created_at,other:bcClientEmailAddress(m.recipient),subject:m.subject||'',message:m});
+ }
+ const groups=new Map();
+ for(const m of messages){const key=m.other+'|'+bcConversationSubject(m.subject);if(!groups.has(key))groups.set(key,{key,other:m.other,subject:m.subject||'(No subject)',messages:[]});groups.get(key).messages.push(m);}
+ return [...groups.values()].map(g=>({...g,messages:g.messages.sort((a,b)=>Date.parse(a.when)-Date.parse(b.when)),latest:Math.max(...g.messages.map(m=>Date.parse(m.when)||0))})).sort((a,b)=>b.latest-a.latest);
+}
+function bcConversationOpen(key){bcConversationSelected=key;render();}
+function bcConversationLayout(){
+ const groups=bcConversationGroups();const selected=groups.find(g=>g.key===bcConversationSelected)||groups[0];
+ const entries=selected?selected.messages.map(m=>{
+  const received=m.kind==='received';const body=received?bcEmailBody(m.message):m.message.body_text;
+  const meta=received?'From: '+m.message.sender:'To: '+m.message.recipient;
+  return `<article style="border:1px solid #dce4ee;border-radius:9px;padding:14px;margin-bottom:12px;background:#fff"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${received?'Received':'Sent'}</b><span style="font-size:12px;color:#60758d">${bcInboxEscape(new Date(m.when).toLocaleString())}</span></div><p style="font-size:12px;margin:8px 0">${bcInboxEscape(meta)}</p><div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55">${bcInboxEscape(body||'No message text available.')}</div>${received?`<p><button class="btn secondary" onclick="bcReplyIncoming('${bcInboxEscape(m.id)}')">Reply</button></p>`:''}</article>`;
+ }).join(''):'';
+ return `<p class="muted">Correspondence grouped by contact and subject. Messages with changed subjects may appear in separate conversations.</p>${bcInboxFilterNotice()}<div style="display:grid;grid-template-columns:minmax(210px,35%) minmax(0,65%);gap:14px;align-items:start"><div style="max-height:65vh;overflow:auto;border:1px solid #dce4ee;border-radius:8px">${groups.map(g=>`<button type="button" onclick="bcConversationOpen('${bcInboxEscape(g.key)}')" style="display:block;width:100%;text-align:left;padding:12px;border:0;border-bottom:1px solid #e5ebf1;background:${selected?.key===g.key?'#e9f1fa':'white'};cursor:pointer;color:#18283e"><strong>${bcInboxEscape(g.subject)}</strong><div style="font-size:12px;overflow-wrap:anywhere">${bcInboxEscape(g.other)}</div><div style="font-size:11px;color:#60758d">${g.messages.length} message(s) · ${bcInboxEscape(new Date(g.latest).toLocaleDateString())}</div></button>`).join('')||'<p style="padding:14px">No conversations yet.</p>'}</div><div style="min-width:0">${selected?`<h3>${bcInboxEscape(selected.subject)}</h3><p class="muted">${bcInboxEscape(selected.other)}</p>${entries}`:'<p>Select a conversation.</p>'}</div></div>`;
+}
+const bcMailSwitchBeforeConversations=bcMailSwitch;
+bcMailSwitch=function(tab){if(tab==='conversations'){bcMailTab=tab;bcSendFeedback='';render();bcLoadSent();return;}bcMailSwitchBeforeConversations(tab);};
+const bcInboxLayoutBeforeConversations=bcInboxLayout;
+bcInboxLayout=function(){
+ const base=bcInboxLayoutBeforeConversations();
+ const needle=`<button class="btn ${bcMailTab==='sent'?'':'secondary'}" onclick="bcMailSwitch('sent')">Sent Emails</button>`;
+ const conversations=`<button class="btn ${bcMailTab==='conversations'?'':'secondary'}" onclick="bcMailSwitch('conversations')">Conversations</button>`;
+ let html=base.replace(needle,needle+conversations);
+ if(bcMailTab==='conversations'){
+  const panel=html.indexOf('<section class="panel">');
+  if(panel>=0){const prefix=html.slice(0,panel);html=prefix+`<section class="panel"><div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn secondary" onclick="bcMailSwitch('inbox')">Inbox</button><button class="btn secondary" onclick="bcMailSwitch('sent')">Sent Emails</button><button class="btn" onclick="bcMailSwitch('conversations')">Conversations</button><button class="btn secondary" onclick="bcOpenCompose()">+ Compose</button></div>${bcConversationLayout()}</section>`;}
+ }
+ return html;
+};
+
 </script>
 </body></html>
