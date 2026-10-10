@@ -597,9 +597,18 @@ function bcStaffForm(id=''){
  const x=bcStaff.find(v=>v.id===id)||{};
  bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Manage this employee profile. To send a login invitation, save an active employee with an email address, then return to Team Directory.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
 }
-function bcAssignTask(jobId,taskId){
- const t=bcAllTasks.find(v=>v.id===taskId);if(!t)return;
- bcJobModal(`<h3>Assign Task</h3><p class="notice">${esc(t.title)}</p><form id="bcJobForm" class="bc-staff-form"><label>Assigned Employee<select name="staffId"><option value="">Unassigned</option>${bcStaff.filter(x=>x.active).map(x=>`<option value="${x.id}" ${t.assigned_staff_id===x.id?'selected':''}>${esc(x.display_name)}</option>`).join('')}</select></label><label>Priority<select name="priority">${['Low','Normal','High','Urgent'].map(x=>`<option ${t.priority===x?'selected':''}>${x}</option>`).join('')}</select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Assignment</button></div></form>`,async form=>{await bcCall('job_task_assign',{jobId,taskId,...Object.fromEntries(new FormData(form))})});
+async function bcAssignTask(jobId,taskId){
+ const t=bcAllTasks.find(v=>v.id===taskId)||bcJobTasks.find(v=>v.id===taskId);if(!t)return;
+ try{
+ const response=await bcCall('job_task_assignees_list');
+ const selected=new Set((response.items||[]).filter(x=>String(x.task_id)===String(taskId)).map(x=>String(x.staff_id)));
+ if(!selected.size&&t.assigned_staff_id)selected.add(String(t.assigned_staff_id));
+ bcJobModal(`<h3>Assign Task</h3><p class="notice">${esc(t.title)}</p><form id="bcJobForm" class="bc-staff-form"><label>Assigned Employees (select more than one)</label><div style="max-height:260px;overflow:auto;border:1px solid #d4dfeb;padding:12px;border-radius:8px">${bcStaff.filter(x=>x.active).map(x=>`<label style="display:flex;align-items:center;gap:10px;margin:8px 0"><input type="checkbox" name="staffIds" value="${esc(x.id)}" ${selected.has(String(x.id))?'checked':''} style="width:auto">${esc(x.display_name)}</label>`).join('')||'<p>No active employees found.</p>'}</div><label>Priority<select name="priority">${['Low','Normal','High','Urgent'].map(x=>`<option ${t.priority===x?'selected':''}>${x}</option>`).join('')}</select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Assignment</button></div></form>`,async form=>{
+ const fd=new FormData(form),staffIds=fd.getAll('staffIds');
+ await bcCall('job_task_assign',{jobId,taskId,staffId:staffIds[0]||'',priority:fd.get('priority')||'Normal'});
+ await bcCall('job_task_assignees_save',{jobId,taskId,staffIds});
+ });
+ }catch(e){alert('Unable to open task assignment: '+e.message)}
 }
 const bcTaskStyle=document.createElement('style');
 bcTaskStyle.textContent=`
