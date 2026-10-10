@@ -123,7 +123,8 @@ function paintTaskNoteButtons(){
   if(!taskId)return;
   const isNew=unreadTaskNotes.has(String(taskId));
   button.classList.toggle('bc-notes-new',isNew);
-  button.textContent=isNew?'Task Notes • New':'Task Notes';
+  const desiredLabel=isNew?'Task Notes • New':'Task Notes';
+  if(button.textContent!==desiredLabel)button.textContent=desiredLabel;
  });
 }
 async function refreshTaskNoteIndicators(){
@@ -142,8 +143,6 @@ employeeTaskNotes=async function(taskId,title){
  paintTaskNoteButtons();
  await refreshTaskNoteIndicators();
 };
-const taskNoteObserver=new MutationObserver(paintTaskNoteButtons);
-taskNoteObserver.observe(document.getElementById('rows'),{childList:true,subtree:true});
 const previousLoad=load;
 load=async function(){await previousLoad();await refreshTaskNoteIndicators()};
 setTimeout(refreshTaskNoteIndicators,1500);
