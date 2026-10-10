@@ -660,4 +660,12 @@ const bcNotesTaskDashboard=bcTaskDashboard;
 bcTaskDashboard=function(){return bcNotesTaskDashboard().replace(/(<button class="btn secondary" onclick="bcAssignTask\('([^']+)','([^']+)'\)">Assign<\/button>)/g,(match,whole,jobId,taskId)=>whole+' <button class="btn secondary" onclick="bcTaskNotesOpen(\''+taskId+'\')">Notes</button>')};
 const bcNotesJobDetail=bcJobDetail;
 bcJobDetail=function(j){return bcNotesJobDetail(j).replace(/(<select onchange="bcJobTaskStatus\('([^']+)',this.value\)">)/g,(match,whole,taskId)=>'<button class="btn secondary" style="margin:8px" onclick="bcTaskNotesOpen(\''+taskId+'\')">Task Notes</button>'+whole)};
+</script><script>
+/* Administrator notification review — read-only inbox with explicit refresh. */
+async function bcOpenNotificationCenter(){
+ const modal=document.getElementById('modal');document.getElementById('modalbg').classList.add('show');
+ modal.innerHTML='<h3>Employee Notifications</h3><p class="notice">Recent assignment, task status and task note notifications across the workspace.</p><div id="bcNotificationList">Loading…</div><div class="actions"><button class="btn secondary" onclick="closeModal()">Close</button></div>';
+ try{const r=await bcCall('notifications_list');document.getElementById('bcNotificationList').innerHTML=(r.items||[]).map(n=>'<div style="border-bottom:1px solid #e1e8f0;padding:10px 0"><b>'+esc(n.title)+'</b> <small>'+esc(new Date(n.created_at).toLocaleString())+'</small><div style="margin:5px 0;white-space:pre-wrap">'+esc(n.message)+'</div><small>'+esc(n.read_at?'Read':'Unread')+'</small></div>').join('')||'<p class="notice">No notifications yet.</p>'}catch(e){document.getElementById('bcNotificationList').textContent=e.message}
+}
+(function(){const b=document.createElement('button');b.type='button';b.textContent='Employee Notifications';b.className='btn secondary';b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:3;box-shadow:0 5px 20px #0002';b.onclick=bcOpenNotificationCenter;document.body.appendChild(b)})();
 </script></body></html>
