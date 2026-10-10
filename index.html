@@ -703,8 +703,26 @@ function bcStaffDirectory(){
 }
 function bcStaffForm(id=''){
  const x=bcStaff.find(v=>v.id===id)||{};
- bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Manage this employee profile. To send a login invitation, save an active employee with an email address, then return to Team Directory.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{const data=Object.fromEntries(new FormData(form));await bcCall('staff_save',{...data,id:id||undefined,active:data.active==='true'});const r=await bcCall('staff_list');bcStaff=r.items||[]});
+ bcJobModal(`<h3>${id?'Edit':'Add'} Employee</h3><p class="notice">Active employees with an email address will automatically receive a secure sign-in invitation when first saved. Existing linked accounts will not be reinvited.</p><form id="bcJobForm" class="bc-staff-form"><label>Full Name<input name="display_name" value="${esc(x.display_name||'')}" required maxlength="120"></label><label>Email<input name="email" type="email" value="${esc(x.email||'')}" placeholder="employee@example.com"></label><label>Directory Role<select name="role"><option ${x.role==='Employee'?'selected':''}>Employee</option><option ${x.role==='Business Admin'?'selected':''}>Business Admin</option></select></label><label>Status<select name="active"><option value="true" ${x.active!==false?'selected':''}>Active</option><option value="false" ${x.active===false?'selected':''}>Inactive</option></select></label><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="bcStaffDirectory()">Back</button><button class="btn" type="submit">Save Employee</button></div></form>`,async form=>{
+  const data=Object.fromEntries(new FormData(form));
+  const active=data.active==='true';
+  const email=String(data.email||'').trim().toLowerCase();
+  if(active&&!email)throw Error('Enter an email address to invite an active employee.');
+  await bcCall('staff_save',{...data,email,id:id||undefined,active});
+  const result=await bcCall('staff_list');bcStaff=result.items||[];
+  const person=bcStaff.find(v=>id?String(v.id)===String(id):String(v.email||'').trim().toLowerCase()===email);
+  if(active&&person&&!person.user_id){
+   try{
+    await bcEmployeeCall('invite',{staffId:person.id});
+    const refreshed=await bcCall('staff_list');bcStaff=refreshed.items||[];
+    alert('Employee saved. A secure sign-in invitation was sent to '+email+'.');
+   }catch(err){
+    alert('Employee saved, but the invitation could not be sent: '+err.message+'\n\nOpen Team Directory and use Send Invitation to retry.');
+   }
+  }
+ });
 }
+
 async function bcAssignTask(jobId,taskId){
  const t=bcAllTasks.find(v=>v.id===taskId)||bcJobTasks.find(v=>v.id===taskId);if(!t)return;
  try{
