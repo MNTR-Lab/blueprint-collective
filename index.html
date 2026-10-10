@@ -419,17 +419,46 @@ async function bcJobOpen(id){
  try{const r=await bcCall('job_details',{jobId:id});bcJobTasks=r.tasks||[];bcJobActivity=r.activity||[];bcJobDocs=r.documents||[];render()}
  catch(e){alert('Unable to load job details: '+e.message)}
 }
+function bcJobStatusSelect(j){
+ return `<select class="bc-job-status-select" aria-label="Job status for ${esc(j.title)}" onchange="bcJobQuickStatus('${j.id}',this)" title="Change job status">${bcJobStatuses.map(status=>`<option value="${esc(status)}" ${j.job_status===status?'selected':''}>${esc(status)}</option>`).join('')}</select>`;
+}
+async function bcJobQuickStatus(jobId,select){
+ const job=bcJobs.find(j=>String(j.id)===String(jobId));
+ if(!job||!select||select.value===job.job_status)return;
+ const previous=job.job_status, next=select.value;
+ select.disabled=true;
+ try{
+  await bcCall('job_update',{jobId,job_status:next});
+  job.job_status=next;
+  await bcLoadJobs();
+ }catch(error){
+  job.job_status=previous;
+  select.value=previous;
+  alert('Unable to update job status: '+error.message);
+  render();
+ }finally{select.disabled=false}
+}
+const bcJobStatusStyle=document.createElement('style');
+bcJobStatusStyle.textContent=`
+.bc-job-status-select{width:100%;min-width:145px;max-width:225px;border:1px solid #ccd9e7;border-radius:9px;background:#fff;color:#1c3b5b;padding:10px 32px 10px 11px;font-size:13px;font-weight:700;cursor:pointer;outline:none}
+.bc-job-status-select:hover{border-color:#7498bc;background:#f8fbff}
+.bc-job-status-select:focus{border-color:#2465a0;box-shadow:0 0 0 3px rgba(36,101,160,.12)}
+.bc-job-status-select:disabled{opacity:.55;cursor:wait}
+.bc-job-status-card{margin-top:14px}
+.bc-job-status-card .bc-job-status-select{max-width:100%;font-size:15px;padding:11px 30px 11px 12px}
+`;
+document.head.appendChild(bcJobStatusStyle);
 function bcJobsView(){
  if(bcJobSelected){const j=bcJobs.find(x=>x.id===bcJobSelected);if(j)return bcJobDetail(j);bcJobSelected=null}
  const active=bcJobs.filter(j=>!['Completed','Cancelled'].includes(j.job_status));
  return `<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage production, services, creative projects, customer orders, and internal work.</p></div><button class="btn secondary" onclick="bcLoadJobs()">↻ Refresh</button></div>
  <div class="cards"><div class="card"><div class="label">Total Jobs</div><div class="value">${bcJobs.length}</div></div><div class="card"><div class="label">Active Jobs</div><div class="value">${active.length}</div></div><div class="card"><div class="label">In Progress</div><div class="value">${bcJobs.filter(j=>j.job_status==='In Progress').length}</div></div><div class="card"><div class="label">Completed</div><div class="value">${bcJobs.filter(j=>j.job_status==='Completed').length}</div></div></div>
- <section class="panel"><h3>Job Directory</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Type</th><th>Status</th><th>Due Date</th><th>Value</th><th></th></tr></thead><tbody>${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${esc(j.job_type||'General Project')}</td><td>${esc(j.job_status)}</td><td>${bcSalesDate(j.due_date)}</td><td>${bcSalesMoney(j.approved_amount)}</td><td><button class="btn secondary" onclick="bcJobOpen('${j.id}')">Open Job</button></td></tr>`).join(''):'<tr><td colspan="7">No jobs yet. Convert an approved opportunity from Sales Pipeline.</td></tr>'}</tbody></table></div></section>`;
+ <section class="panel"><h3>Job Directory</h3><div class="tablewrap"><table><thead><tr><th>Job</th><th>Client</th><th>Type</th><th>Status</th><th>Due Date</th><th>Value</th><th></th></tr></thead><tbody>${bcJobs.length?bcJobs.map(j=>`<tr><td><b>${esc(j.title)}</b></td><td>${esc(j.client_name||'—')}</td><td>${esc(j.job_type||'General Project')}</td><td>${bcJobStatusSelect(j)}</td><td>${bcSalesDate(j.due_date)}</td><td>${bcSalesMoney(j.approved_amount)}</td><td><button class="btn secondary" onclick="bcJobOpen('${j.id}')">Open Job</button></td></tr>`).join(''):'<tr><td colspan="7">No jobs yet. Convert an approved opportunity from Sales Pipeline.</td></tr>'}</tbody></table></div></section>`;
 }
 function bcJobDetail(j){
  const complete=bcJobTasks.filter(t=>t.status==='Completed').length;
  return `<div class="heading"><div><button class="btn secondary" onclick="bcJobSelected=null;render()">← All Jobs</button><h2 style="margin-top:12px">${esc(j.title)}</h2><p>${esc(j.client_name||'—')} · ${esc(j.client_number||'—')} · ${esc(j.contact_name||'—')}</p></div><button class="btn" onclick="bcJobEdit()">Edit Job Details</button></div>
- <div class="cards"><div class="card"><div class="label">Job Status</div><div class="value" style="font-size:21px">${esc(j.job_status)}</div></div><div class="card"><div class="label">Project Type</div><div class="value" style="font-size:19px">${esc(j.job_type||'General Project')}</div></div><div class="card"><div class="label">Due Date</div><div class="value" style="font-size:21px">${bcSalesDate(j.due_date)}</div></div><div class="card"><div class="label">Tasks Complete</div><div class="value">${complete}/${bcJobTasks.length}</div></div></div>
+ <div class="cards"><div class="card"><div class="label">Job Status</div><div class="bc-job-status-card">${bcJobStatusSelect(j)}</div></div><div class="card"><div class="label">Project Type</div><div class="value" style="font-size:19px">${esc(j.job_type||'General Project')}</div></div><div class="card"><div class="label">Due Date</div><div class="value" style="font-size:21px">${bcSalesDate(j.due_date)}</div></div><div class="card"><div class="label">Tasks Complete</div><div class="value">${complete}/${bcJobTasks.length}</div></div></div>
  <div class="twocol"><section class="panel"><h3>Job Information</h3><div class="formgrid"><div><div class="notice">Assigned To</div><b>${esc(j.assigned_to||'Not assigned')}</b></div><div><div class="notice">Priority</div><b>${esc(j.priority||'Normal')}</b></div><div><div class="notice">Start Date</div><b>${bcSalesDate(j.start_date)}</b></div><div><div class="notice">Approved Value</div><b>${bcSalesMoney(j.approved_amount)}</b></div></div><h3>Description</h3><p>${esc(j.description||'No description yet.')}</p><h3>Internal Notes</h3><p>${esc(j.internal_notes||'No internal notes yet.')}</p><button class="btn secondary" onclick="bcSalesDownload('${j.approved_quote_id}')">Open Approved Quote</button></section>
  <section class="panel"><div class="heading"><h3>Tasks & Checklist</h3><button class="btn" onclick="bcJobTaskForm()">+ Add Task</button></div>${bcJobTasks.length?bcJobTasks.map(t=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><b>${esc(t.title)}</b><div class="notice">${esc(t.assigned_to||'Unassigned')} · Due ${bcSalesDate(t.due_date)}</div><select onchange="bcJobTaskStatus('${t.id}',this.value)">${['To Do','In Progress','Completed'].map(x=>`<option ${x===t.status?'selected':''}>${x}</option>`).join('')}</select></div>`).join(''):'<p class="notice">No tasks yet.</p>'}</section></div>
  <div class="twocol" style="margin-top:20px"><section class="panel"><div class="heading"><h3>Documents & Artwork</h3><button class="btn" onclick="bcJobDocumentForm()">+ Upload File</button></div><p class="notice">Approved quote remains linked to this job.</p>${bcJobDocs.length?bcJobDocs.map(d=>`<div style="padding:12px 0;border-bottom:1px solid #e5eaf0"><b>${esc(d.file_name)}</b><div class="notice">${esc(d.category)} · ${Math.round(d.file_size/1024)} KB</div><button class="btn secondary" onclick="bcJobDocumentOpen('${d.id}')">Open</button></div>`).join(''):'<p class="notice">No additional documents yet.</p>'}</section>
