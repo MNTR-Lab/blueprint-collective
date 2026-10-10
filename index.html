@@ -144,11 +144,11 @@ async function bcLogin(e){
 }
 function bcLogout(){if(typeof window.bcUniversalLogout==='function')return window.bcUniversalLogout();alert('Sign-out is still initializing. Please try again.');}
 function bcClientEmailAddress(value){const v=String(value||'').trim();const m=v.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);return m?m[0].toLowerCase():'';}
-function bcEmailClientMatch(m){const sender=bcClientEmailAddress(m.sender);if(!sender)return null;const matches=bcClients.filter(c=>bcClientEmailAddress(c.email)===sender);return matches.length===1?matches[0]:null;}
+function bcEmailClientMatch(m){if(m.linked_client_external_id!=null){return bcClients.find(c=>String(c.id)===String(m.linked_client_external_id))||null;}const sender=bcClientEmailAddress(m.sender);if(!sender)return null;const matches=bcClients.filter(c=>bcClientEmailAddress(c.email)===sender);return matches.length===1?matches[0]:null;}
 let bcInboxClientFilter=null;
 function bcShowClientEmails(clientId){const c=bcClients.find(x=>String(x.id)===String(clientId));if(!c)return;bcInboxClientFilter=String(c.id);navigate('email');}
 function bcInboxVisibleMessages(){if(!bcInboxClientFilter)return bcInboxMessages;const c=bcClients.find(x=>String(x.id)===bcInboxClientFilter);if(!c)return [];return bcInboxMessages.filter(m=>bcEmailClientMatch(m)?.id===c.id);}
-function bcInboxFilterNotice(){if(!bcInboxClientFilter)return '';const c=bcClients.find(x=>String(x.id)===bcInboxClientFilter);return `<p class="notice">Showing correspondence for <b>${bcInboxEscape(c?.name||'Selected client')}</b> (exact sender email match). <button class="btn secondary" onclick="bcInboxClientFilter=null;bcInboxSelected=null;render()">Show All Email</button></p>`;}
+function bcInboxFilterNotice(){if(!bcInboxClientFilter)return '';const c=bcClients.find(x=>String(x.id)===bcInboxClientFilter);return `<p class="notice">Showing correspondence for <b>${bcInboxEscape(c?.name||'Selected client')}</b> (manual links take priority; otherwise exact sender email match). <button class="btn secondary" onclick="bcInboxClientFilter=null;bcInboxSelected=null;render()">Show All Email</button></p>`;}
 function bcClientRows(items){
   return `<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th><th>Emails</th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'—')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':'Active')}</td><td><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${esc(x.id)}',this.checked)"> Make Inactive</label></td><td><button class="btn secondary" onclick="bcShowClientEmails('${esc(x.id)}')">View Emails</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
 }
@@ -1080,6 +1080,52 @@ bcInboxLayout=function(){
  const section=html.indexOf('<section class="panel">');
  return section<0?html:html.slice(0,section)+summary+html.slice(section);
 };
+
+
+/* Secure manual client assignment for incoming email.
+   The linked client ID is the Monday.com item ID (text), not a Supabase UUID.
+   Unlink restores normal address matching; original messages remain unchanged. */
+let bcEmailLinkBusy=false,bcEmailLinkFeedback='';
+async function bcSetEmailClientLink(messageId,clientId){
+ if(bcEmailLinkBusy)return;
+ const m=bcInboxMessages.find(x=>String(x.id)===String(messageId));
+ if(!m)return;
+ if(clientId && !bcClients.some(c=>String(c.id)===String(clientId))){bcEmailLinkFeedback='Select a valid client.';render();return;}
+ bcEmailLinkBusy=true;bcEmailLinkFeedback='';render();
+ try{
+  if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60)await bcRefreshSession();
+  const response=await fetch(BC_URL+'/functions/v1/blueprint-email-inbox',{
+   method:'POST',headers:bcAuthHeaders(bcSession.access_token),
+   body:JSON.stringify({action:'link',messageId:String(messageId),clientId:clientId||null})
+  });
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error||'Unable to update client link');
+  m.linked_client_external_id=result.message.linked_client_external_id;
+  bcEmailLinkFeedback=clientId?'Email linked to client.':'Manual link removed. Automatic email matching still applies.';
+ }catch(e){bcEmailLinkFeedback=e.message||String(e);}
+ finally{bcEmailLinkBusy=false;render();}
+}
+const bcInboxDetailBeforeLink=bcInboxDetail;
+bcInboxDetail=function(m){
+ const html=bcInboxDetailBeforeLink(m);
+ if(!m)return html;
+ const assigned=m.linked_client_external_id==null?'':String(m.linked_client_external_id);
+ const matched=bcEmailClientMatch(m);
+ const choices=[...bcClients].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ const opts=choices.map(c=>'<option value="'+bcInboxEscape(String(c.id))+'" '+(assigned===String(c.id)?'selected':'')+'>'+bcInboxEscape(c.name||'Client')+' ('+bcInboxEscape(c.clientNumber||String(c.id))+')</option>').join('');
+ const form='<div style="padding:12px;margin:12px 0;border:1px solid #dce4ee;border-radius:8px">'+
+  '<label style="display:block;font-weight:600;margin-bottom:6px">Link this incoming email to a client</label>'+
+  '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+  '<select id="bcEmailClientSelect" style="min-width:220px;max-width:100%;padding:8px;flex:1" '+(bcEmailLinkBusy?'disabled':'')+'>'+
+  '<option value="">No manual client link</option>'+opts+'</select>'+
+  '<button class="btn secondary" '+(bcEmailLinkBusy?'disabled':'')+' onclick="bcSetEmailClientLink('+JSON.stringify(String(m.id))+',document.getElementById(\'bcEmailClientSelect\').value)">'+(bcEmailLinkBusy?'Saving…':'Save Link')+'</button>'+
+  (assigned?'<button class="btn secondary" '+(bcEmailLinkBusy?'disabled':'')+' onclick="bcSetEmailClientLink('+JSON.stringify(String(m.id))+',null)">Unlink</button>':'')+'</div>'+
+  '<p class="muted" style="margin-top:8px">'+(assigned?'Manually linked: '+bcInboxEscape(matched?.name||'Client not found'):'Automatic match: '+bcInboxEscape(matched?.name||'None'))+'</p>'+
+  (bcEmailLinkFeedback?'<p class="notice">'+bcInboxEscape(bcEmailLinkFeedback)+'</p>':'')+'</div>';
+ return html.replace('<hr>',form+'<hr>');
+};
+const bcOpenInboxMessageBeforeLink=bcOpenInboxMessage;
+bcOpenInboxMessage=function(id){bcEmailLinkFeedback='';bcOpenInboxMessageBeforeLink(id);};
 
 </script>
 </body></html>
