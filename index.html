@@ -644,4 +644,20 @@ const bcSalesPriorNavigate=navigate;
 navigate=function(p){bcSalesSelected=null;bcSalesPriorNavigate(p);if(p==='deals'&&bcSession){bcLoadSales();if(!bcLoaded)bcLoad();else if(!bcContactsLoaded)bcLoadContacts()}if(p==='jobs'&&bcSession){bcJobSelected=null;bcLoadJobs()}if(p==='tasks'&&bcSession)bcLoadAllTasks()};
 if(bcSession&&page==='deals')bcLoadSales();
 </script>
-</body></html>
+<script>
+/* Secure task notes - administrator */
+async function bcTaskNotesOpen(taskId){
+ const task=bcAllTasks.find(t=>String(t.id)===String(taskId))||bcJobTasks.find(t=>String(t.id)===String(taskId));
+ if(!task)return alert('Task not found. Refresh first.');
+ const modal=document.getElementById('modal');
+ modal.innerHTML='<h3>Task Notes — '+esc(task.title)+'</h3><p class="notice">Shared with employees assigned to this task. Notes cannot be edited or deleted.</p><div id="bcTaskNotesHistory">Loading…</div><form id="bcTaskNotesForm"><label style="display:block;margin:15px 0 8px;font-weight:650">New note</label><textarea name="note" rows="4" maxlength="5000" required style="width:100%;padding:11px;border:1px solid #ccd8e4;border-radius:8px" placeholder="Progress update, question or issue…"></textarea><p id="bcTaskNotesMsg" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Close</button><button class="btn" type="submit">Save Note</button></div></form>';
+ document.getElementById('modalbg').classList.add('show');
+ const refresh=async()=>{const r=await bcCall('task_notes_list',{taskId});const node=document.getElementById('bcTaskNotesHistory');if(node)node.innerHTML=(r.items||[]).map(n=>'<div style="border-bottom:1px solid #e6edf4;padding:12px 0"><b>'+esc(n.author_name)+'</b> <small>'+esc(new Date(n.created_at).toLocaleString())+'</small><div style="white-space:pre-wrap;margin-top:7px">'+esc(n.note)+'</div></div>').join('')||'<p class="notice">No notes yet.</p>'};
+ try{await refresh()}catch(err){document.getElementById('bcTaskNotesHistory').textContent=err.message}
+ document.getElementById('bcTaskNotesForm').onsubmit=async ev=>{ev.preventDefault();const btn=ev.target.querySelector('[type=submit]'),msg=document.getElementById('bcTaskNotesMsg');btn.disabled=true;msg.textContent='Saving…';try{await bcCall('task_note_add',{taskId,note:ev.target.elements.note.value});ev.target.reset();msg.textContent='Note saved';await refresh()}catch(err){msg.textContent=err.message}finally{btn.disabled=false}};
+}
+const bcNotesTaskDashboard=bcTaskDashboard;
+bcTaskDashboard=function(){return bcNotesTaskDashboard().replace(/(<button class="btn secondary" onclick="bcAssignTask\('([^']+)','([^']+)'\)">Assign<\/button>)/g,(match,whole,jobId,taskId)=>whole+' <button class="btn secondary" onclick="bcTaskNotesOpen(\''+taskId+'\')">Notes</button>')};
+const bcNotesJobDetail=bcJobDetail;
+bcJobDetail=function(j){return bcNotesJobDetail(j).replace(/(<select onchange="bcJobTaskStatus\('([^']+)',this.value\)">)/g,(match,whole,taskId)=>'<button class="btn secondary" style="margin:8px" onclick="bcTaskNotesOpen(\''+taskId+'\')">Task Notes</button>'+whole)};
+</script></body></html>
