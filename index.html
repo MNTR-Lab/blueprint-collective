@@ -454,12 +454,35 @@ function bcJobNoteForm(){
  bcJobModal(`<div class="bc-note-header"><h3>Add Job Note</h3><p>Record a conversation, update, decision, or other important job information.</p></div><form id="bcJobForm" class="bc-note-form"><label for="bcNoteText">Job note</label><textarea id="bcNoteText" name="detail" rows="6" placeholder="Enter your note here..." maxlength="5000" required autofocus></textarea><p class="bc-note-hint">This note will be saved to the job's activity history.</p><p id="bcJobMsg" class="notice" role="status"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Note</button></div></form>`,async form=>{await bcCall('job_note',{jobId:bcJobSelected,...Object.fromEntries(new FormData(form))})});
 }
 function bcJobDocumentForm(){
- bcJobModal(`<h3>Upload Job Document</h3><form id="bcJobForm"><label>Document<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" required></label><label>Category<select name="category">${['General','Artwork','Proof','Production','Contract','Deliverable'].map(x=>`<option>${x}</option>`).join('')}</select></label><p class="notice">Maximum file size 15 MB.</p><p id="bcJobMsg" class="notice"></p><div class="actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Upload Document</button></div></form>`,async form=>{
+ bcJobModal(`<div class="bc-upload-header"><div class="bc-upload-symbol" aria-hidden="true">↑</div><div><h3>Upload Job Document</h3><p>Add a file to this job’s documents and artwork.</p></div></div><form id="bcJobForm" class="bc-upload-form"><label class="bc-upload-label" for="bcUploadFile">Document file <span class="bc-upload-required">*</span></label><div class="bc-upload-file-wrap"><input id="bcUploadFile" name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" required><span class="bc-upload-help">PDF, Word, Excel, PNG or JPG · Maximum 15 MB</span></div><label class="bc-upload-label" for="bcUploadCategory">Document category</label><select id="bcUploadCategory" name="category" class="bc-upload-select">${['General','Artwork','Proof','Production','Contract','Deliverable'].map(x=>`<option>${x}</option>`).join('')}</select><p id="bcJobMsg" class="notice bc-upload-message" role="status"></p><div class="actions bc-upload-actions"><button class="btn secondary" type="button" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Upload Document</button></div></form>`,async form=>{
  const file=form.elements.file.files[0];if(!file||file.size>15*1024*1024)throw Error('Choose a file up to 15 MB');
  const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file)});
  await bcCall('job_document_upload',{jobId:bcJobSelected,fileName:file.name,mime:file.type,base64,category:form.elements.category.value});
  });
 }
+/* Upload Job Document modal — visual styling only */
+const bcUploadStyle=document.createElement('style');
+bcUploadStyle.textContent=`
+.modal:has(.bc-upload-form){max-width:540px;padding:0;border-radius:16px;overflow:auto}
+.bc-upload-header{display:flex;align-items:center;gap:15px;padding:27px 30px 22px;border-bottom:1px solid #e8edf3}
+.bc-upload-symbol{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:12px;background:#eaf1f9;color:#174774;font-size:27px;font-weight:600}
+.bc-upload-header h3{margin:0 0 5px;font-size:20px;line-height:1.25;color:#182d47;font-weight:750}
+.bc-upload-header p{margin:0;color:#738398;font-size:13px;line-height:1.5}
+.bc-upload-form{display:flex;flex-direction:column;padding:25px 30px 0}
+.bc-upload-label{display:block;margin:0 0 9px;font-size:13px;font-weight:700;color:#2c4059}
+.bc-upload-required{color:#b33a4a}
+.bc-upload-file-wrap{border:1px dashed #b9c9db;border-radius:11px;background:#f8fafc;padding:18px;margin-bottom:23px}
+.bc-upload-file-wrap input[type=file]{display:block;width:100%;max-width:100%;font-size:13px;color:#334a64}
+.bc-upload-file-wrap input[type=file]::file-selector-button{margin-right:12px;padding:9px 13px;background:white;color:#244366;border:1px solid #cbd7e5;border-radius:7px;font:inherit;font-weight:650;cursor:pointer}
+.bc-upload-help{display:block;margin-top:12px;color:#718399;font-size:12px;line-height:1.45}
+.bc-upload-select{width:100%;min-height:43px;border:1px solid #d4deea;border-radius:8px;background:#fff;color:#263b55;padding:10px 12px;margin-bottom:5px}
+.bc-upload-select:focus,.bc-upload-file-wrap:focus-within{outline:2px solid #9fc3e8;outline-offset:1px}
+.bc-upload-message{min-height:16px;margin:8px 0 0;line-height:1.4}
+.bc-upload-actions{margin:22px -30px 0;padding:17px 30px;background:#f8fafc;border-top:1px solid #e8edf3;gap:10px}
+.bc-upload-actions .btn{min-height:42px;padding:10px 18px}
+@media(max-width:550px){.bc-upload-header{padding:22px 20px 18px}.bc-upload-form{padding:20px 20px 0}.bc-upload-actions{margin-left:-20px;margin-right:-20px;padding:15px 20px}}
+`;document.head.appendChild(bcUploadStyle);
+
 async function bcJobDocumentOpen(documentId){try{const r=await bcCall('job_document_url',{jobId:bcJobSelected,documentId});window.open(r.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open document: '+e.message)}}
 
 const bcNoteStyle=document.createElement('style');bcNoteStyle.textContent=`
