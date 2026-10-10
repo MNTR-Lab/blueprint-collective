@@ -1117,7 +1117,7 @@ bcInboxDetail=function(m){
   '<label style="display:block;font-weight:600;margin-bottom:6px">Link this incoming email to a client</label>'+
   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
   '<select id="bcEmailClientSelect" style="min-width:220px;max-width:100%;padding:8px;flex:1" '+(bcEmailLinkBusy?'disabled':'')+'>'+
-  '<option value="">No manual client link</option>'+opts+'</select>'+
+  '<option value="">Not Assigned to a Client</option>'+opts+'</select>'+
   '<button class="btn secondary" '+(bcEmailLinkBusy?'disabled':'')+' onclick="bcSetEmailClientLink('+JSON.stringify(String(m.id))+',document.getElementById(\'bcEmailClientSelect\').value)">'+(bcEmailLinkBusy?'Saving…':'Save Link')+'</button>'+
   (assigned?'<button class="btn secondary" '+(bcEmailLinkBusy?'disabled':'')+' onclick="bcSetEmailClientLink('+JSON.stringify(String(m.id))+',null)">Unlink</button>':'')+'</div>'+
   '<p class="muted" style="margin-top:8px">'+(assigned?'Manually linked: '+bcInboxEscape(matched?.name||'Client not found'):'Automatic match: '+bcInboxEscape(matched?.name||'None'))+'</p>'+
