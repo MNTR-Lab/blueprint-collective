@@ -803,7 +803,7 @@ function updateNoteButtons(){
  });
 }
 async function refreshNoteBadges(){
- if(!window.bcSession)return;
+ if(!bcSession)return;
  try{
   const r=await bcCall('task_notes_unread');
   unreadIds=new Set(r.taskIds||[]);
