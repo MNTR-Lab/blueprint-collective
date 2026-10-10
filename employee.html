@@ -42,9 +42,16 @@ load=async function(){await employeeLoadWithNotes();el('rows').querySelectorAll(
 /* Employee task notifications — loaded from authenticated Supabase Edge Function. */
 async function refreshEmployeeNotifications(){
  const box=el('notificationlist');if(el('workspace').classList.contains('hide'))return;
- try{const result=await call('notifications_list');el('notificationbadge').textContent=result.unread?'('+result.unread+' unread)':'';
- box.innerHTML=(result.items||[]).map(n=>'<div style="padding:12px 0;border-bottom:1px solid #e1e8f0;'+(!n.read_at?'font-weight:650;':'')+'"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><span>'+esc(n.title)+'</span><small>'+esc(new Date(n.created_at).toLocaleString())+'</small></div><div style="font-weight:400;margin:6px 0;white-space:pre-wrap">'+esc(n.message)+'</div>'+(!n.read_at?'<button type="button" class="secondary" data-notification="'+esc(n.id)+'">Mark Read</button>':'<small>Read</small>')+'</div>').join('')||'<p class="message">You have no notifications yet.</p>';
- box.querySelectorAll('[data-notification]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await call('notification_read',{id:b.dataset.notification});await refreshEmployeeNotifications()}catch(e){alert(e.message);b.disabled=false}})
+ try{
+  const result=await call('notifications_list');
+  const items=result.items||[];
+  const unread=items.filter(n=>!n.read_at);
+  const archived=items.filter(n=>!!n.read_at);
+  el('notificationbadge').textContent=unread.length?'('+unread.length+' unread)':'';
+  const formatNotification=(n,isUnread)=>'<div style="padding:12px 0;border-bottom:1px solid #e1e8f0;'+(isUnread?'font-weight:650;':'')+'"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><span>'+esc(n.title)+'</span><small>'+esc(new Date(n.created_at).toLocaleString())+'</small></div><div style="font-weight:400;margin:6px 0;white-space:pre-wrap">'+esc(n.message)+'</div>'+(isUnread?'<button type="button" class="secondary" data-notification="'+esc(n.id)+'">Mark Read</button>':'<small>Archived</small>')+'</div>';
+  box.innerHTML='<div id="bcActiveNotifications">'+(unread.map(n=>formatNotification(n,true)).join('')||'<p class="message">You have no unread notifications.</p>')+'</div>'+
+   '<details id="bcArchivedNotifications" style="margin-top:16px;border-top:1px solid #e1e8f0;padding-top:14px"><summary style="cursor:pointer;font-weight:650;color:#19334f">Archived Notifications ('+archived.length+')</summary><div style="padding-top:8px">'+(archived.map(n=>formatNotification(n,false)).join('')||'<p class="message">No archived notifications yet.</p>')+'</div></details>';
+  box.querySelectorAll('[data-notification]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await call('notification_read',{id:b.dataset.notification});await refreshEmployeeNotifications();if(window.bcUpdateUnreadIndicators)window.bcUpdateUnreadIndicators()}catch(e){alert(e.message);b.disabled=false}});
  }catch(e){box.textContent='Unable to load notifications: '+e.message}
 }
 el('reloadnotifications').onclick=refreshEmployeeNotifications;
