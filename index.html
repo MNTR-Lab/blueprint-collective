@@ -931,7 +931,51 @@ function bcInboxLayout(){return `<div class="heading"><div><h2>Email Inbox</h2><
 function bcOpenInboxMessage(id){bcInboxSelected=id;render();}
 function bcMimeText(b64){try{const bytes=Uint8Array.from(atob(b64||''),c=>c.charCodeAt(0));return new TextDecoder('utf-8',{fatal:false}).decode(bytes);}catch(e){return '';}}
 function bcQuotedPrintable(t){return t.replace(/=\r?\n/g,'').replace(/=([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));}
-function bcEmailBody(m){const raw=bcMimeText(m.raw_mime_base64);if(!raw)return 'Message body unavailable.';const headerEnd=raw.search(/\r?\n\r?\n/);let body=headerEnd<0?raw:raw.slice(headerEnd).replace(/^\r?\n\r?\n/,'');const parts=raw.split(/Content-Type:\s*text\/plain[^\r\n]*\r?\n/i);if(parts.length>1){let part=parts[1];const at=part.search(/\r?\n\r?\n/);if(at>=0)body=part.slice(at).replace(/^\r?\n\r?\n/,'').split(/\r?\n--[^\r\n]+/)[0];}if(/Content-Transfer-Encoding:\s*quoted-printable/i.test(raw))body=bcQuotedPrintable(body);if(/Content-Transfer-Encoding:\s*base64/i.test(raw)){try{body=bcMimeText(body.replace(/[^a-zA-Z0-9+/=]/g,''));}catch(e){}}return body.slice(0,200000);}
+function bcEmailBody(m){
+ const raw=bcMimeText(m.raw_mime_base64);
+ if(!raw)return 'Message content unavailable.';
+ const boundaryMatches=[...raw.matchAll(/boundary\s*=\s*(?:"([^"]+)"|([^;\s\r\n]+))/gi)];
+ const boundaries=boundaryMatches.map(x=>x[1]||x[2]);
+ let chunks=[raw];
+ for(const boundary of boundaries){
+  const next=[];
+  for(const chunk of chunks){
+   const parts=chunk.split('--'+boundary);
+   if(parts.length>1)next.push(...parts.slice(1).filter(x=>!/^--\s*$/.test(x.trim())));
+   else next.push(chunk);
+  }
+  chunks=next;
+ }
+ function decodePart(chunk){
+  const at=chunk.search(/\r?\n\r?\n/);
+  if(at<0)return null;
+  const head=chunk.slice(0,at),content=chunk.slice(at).replace(/^\r?\n\r?\n/,'').replace(/\r?\n--\s*$/,'').trim();
+  const ct=(head.match(/^Content-Type:\s*([^;\r\n]+)/im)||[])[1]?.toLowerCase()||'';
+  if(ct!=='text/plain'&&ct!=='text/html')return null;
+  const transfer=(head.match(/^Content-Transfer-Encoding:\s*([^\r\n]+)/im)||[])[1]?.trim().toLowerCase()||'';
+  let body=content;
+  if(transfer==='base64')body=bcMimeText(content.replace(/[^A-Za-z0-9+/=]/g,''));
+  else if(transfer==='quoted-printable'){
+   const qp=content.replace(/=\r?\n/g,'').replace(/=([0-9a-fA-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+   try{body=new TextDecoder('utf-8').decode(Uint8Array.from(qp,c=>c.charCodeAt(0)));}catch(e){body=qp;}
+  }
+  if(ct==='text/html'){
+   const doc=new DOMParser().parseFromString(body,'text/html');
+   doc.querySelectorAll('script,style,head,svg,iframe,object,template').forEach(el=>el.remove());
+   doc.querySelectorAll('br').forEach(el=>el.replaceWith('\n'));
+   doc.querySelectorAll('p,div,li,tr,blockquote,h1,h2,h3,h4').forEach(el=>el.append('\n'));
+   body=doc.body?.textContent||'';
+  }
+  return {type:ct,body:body.replace(/\r/g,'').replace(/\n{4,}/g,'\n\n\n').trim()};
+ }
+ const parsed=chunks.map(decodePart).filter(Boolean);
+ const plain=parsed.find(x=>x.type==='text/plain'&&x.body);
+ const html=parsed.find(x=>x.type==='text/html'&&x.body);
+ if(plain||html)return (plain||html).body.slice(0,200000);
+ const at=raw.search(/\r?\n\r?\n/);
+ if(!/^Content-Type:\s*multipart\//im.test(raw.slice(0,at<0?0:at))&&at>=0)return raw.slice(at).replace(/^\r?\n\r?\n/,'').trim().slice(0,200000)||'This email has no readable message body.';
+ return 'This email has no readable text or HTML message body.';
+}
 function bcInboxDetail(m){if(!m)return '<p>Select a message.</p>';return `<h3>${bcInboxEscape(m.subject||'(No subject)')}</h3><p style="font-size:13px"><b>From:</b> ${bcInboxEscape(m.sender)}<br><b>To:</b> ${bcInboxEscape(m.recipient)}<br><b>Received:</b> ${bcInboxEscape(new Date(m.received_at).toLocaleString())}</p><hr><div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6;max-height:55vh;overflow:auto">${bcInboxEscape(bcEmailBody(m))}</div>`;}
 async function bcLoadInbox(){if(!bcSession?.access_token){bcInboxError='Please sign in again.';render();return;}bcInboxBusy=true;bcInboxError='';render();try{if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60)await bcRefreshSession();const r=await fetch(BC_URL+'/functions/v1/blueprint-email-inbox',{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:'{}'});const x=await r.json();if(!r.ok)throw Error(x.error||'Unable to load inbox');bcInboxMessages=x.messages||[];if(!bcInboxMessages.some(m=>m.id===bcInboxSelected))bcInboxSelected=null;}catch(e){bcInboxError=e.message||String(e);}finally{bcInboxBusy=false;if(page==='email')render();}}
 
