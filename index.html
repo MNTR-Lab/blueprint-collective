@@ -133,12 +133,12 @@ async function bcLogin(e){
     bcSetSession(json);await bcLoad();
   }catch(err){bcError=err.message;render()}finally{button.disabled=false}
 }
-function bcLogout(){bcSetSession(null);bcClients=[];bcLoaded=false;bcError='';render()}
+function bcLogout(){bcSetSession(null);bcClients=[];bcLoaded=false;bcError='';window.location.replace('/login.html')}
 function bcClientRows(items){
   return `<div class="tablewrap"><table><thead><tr><th>Company / Client</th><th>Client Number</th><th>Primary Contact</th><th>Email</th><th>Phone</th><th>Status</th><th>Make Inactive</th></tr></thead><tbody>${items.length?items.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.clientNumber||'—')}</td><td>${esc(x.contactName||'—')}</td><td>${esc(x.email||'—')}</td><td>${esc(x.phone||'—')}</td><td>${badge(x.inactive?'Inactive':'Active')}</td><td><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${x.inactive?'checked':''} onchange="setClientInactive('${esc(x.id)}',this.checked)"> Make Inactive</label></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No clients in this section</td></tr>'}</tbody></table></div>`;
 }
 clientManagement=function(){
-  if(!bcSession)return `<div class="heading"><div><h2>Clients</h2><p>Sign in to access the live client database.</p></div></div><section class="panel" style="max-width:460px"><h3>Employee sign in</h3>${bcError?`<p class="alert">${esc(bcError)}</p>`:''}<form onsubmit="bcLogin(event)"><div class="formgrid"><label class="wide">Email<input type="email" name="email" autocomplete="username" required></label><label class="wide">Password<input type="password" name="password" autocomplete="current-password" required></label></div><div class="actions"><button class="btn" type="submit">Sign In</button></div></form></section>`;
+  if(!bcSession)return `<div class="heading"><div><h2>Clients</h2><p>Sign in to access the live client database.</p></div></div><section class="panel" style="max-width:460px"><h3>Universal sign in required</h3><p><a href="/login.html">Open secure sign in</a></p><div style="display:none">${bcError?`<p class="alert">${esc(bcError)}</p>`:''}<form onsubmit="bcLogin(event)"><div class="formgrid"><label class="wide">Email<input type="email" name="email" autocomplete="username" required></label><label class="wide">Password<input type="password" name="password" autocomplete="current-password" required></label></div><div class="actions"><button class="btn" type="submit">Sign In</button></div></form></div></section>`;
   const active=bcClients.filter(x=>!x.inactive),inactive=bcClients.filter(x=>x.inactive);
   const tabs=[['active','Active Clients',active.length],['inactive','Inactive Clients',inactive.length],['contacts','Contacts (demo)',records('contacts').length]];
   const tabbar=`<div class="toolbar" role="tablist">${tabs.map(([id,label,n])=>`<button class="btn ${clientTab===id?'':'secondary'}" onclick="switchClientTab('${id}')">${label} (${n})</button>`).join('')}</div>`;
@@ -847,4 +847,34 @@ setInterval(()=>{if(!document.hidden)refreshNoteBadges()},30000);
 setInterval(()=>{if(!document.hidden)updateNoteButtons()},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNoteBadges()});
 })(); 
-</script></body></html>
+</script>
+<script type="module">
+/* Universal login bridge: verifies organization membership before enabling the CRM API. */
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase=createClient(BC_URL,BC_KEY);
+const requested=new URLSearchParams(location.search).get('organization');
+async function initializeWorkspace(){
+ try{
+  const {data:{session},error}=await supabase.auth.getSession();
+  if(error||!session){location.replace('/login.html');return;}
+  const response=await fetch(BC_URL+'/functions/v1/blueprint-access',{
+   method:'POST',headers:bcAuthHeaders(session.access_token),body:'{}'
+  });
+  const access=await response.json();
+  if(!response.ok)throw Error(access.error||'Workspace access denied');
+  const memberships=access.organizations||[];
+  const match=memberships.find(o=>o.id===requested&&o.role==='admin');
+  if(!match){location.replace('/login.html');return;}
+  bcSetSession(session);
+  bcError='';
+  await bcLoad();
+  if(typeof bcLoadContacts==='function')bcLoadContacts();
+ }catch(e){bcSetSession(null);bcError=e.message;render();}
+}
+supabase.auth.onAuthStateChange((event,session)=>{
+ if(event==='SIGNED_OUT'){bcSetSession(null);location.replace('/login.html');}
+ else if(event==='TOKEN_REFRESHED'&&session)bcSetSession(session);
+});
+await initializeWorkspace();
+</script>
+</body></html>
