@@ -22,9 +22,42 @@ async function call(action,extra={}){const {data:{session}}=await client.auth.ge
 async function loadJobs(){try{const r=await call('my_jobs');const box=el('jobcards');box.innerHTML=(r.jobs||[]).map(j=>`<div style="border:1px solid #dce4ed;border-radius:9px;padding:13px;margin:10px 0"><strong>${esc(j.title)}</strong><small style="display:block;margin:5px 0">${esc(j.client_name||'')} · ${esc(j.job_status||'')} · Due ${esc(j.due_date||'Not set')}</small><button class="secondary" data-job="${esc(j.id)}">View Job</button></div>`).join('')||'<p class="message">No jobs assigned yet.</p>';box.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>openJob(b.dataset.job))}catch(e){el('jobcards').textContent='Unable to load jobs: '+e.message}}
 async function openJob(jobId){const box=el('jobdetails');box.classList.remove('hide');box.textContent='Loading job…';try{const r=await call('my_job_details',{jobId});const tasks=(r.tasks||[]).map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(t.status)}</td><td>${esc(t.assigned_to||'')}</td></tr>`).join('');const docs=(r.documents||[]).map(d=>`<li><button class="secondary" data-document="${esc(d.id)}">${esc(d.file_name||'Document')}</button></li>`).join('');const activity=(r.activity||[]).map(a=>`<li>${esc(a.action||'Update')} — ${esc(a.detail||'')} <small>${esc(a.created_at||'')}</small></li>`).join('');box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h3>Job Details</h3><button class="secondary" id="closejob">Close</button></div><h4>Tasks</h4><div class="scroll"><table><thead><tr><th>Task</th><th>Status</th><th>Assigned</th></tr></thead><tbody>${tasks||'<tr><td colspan="3">No tasks</td></tr>'}</tbody></table></div><h4>Documents</h4><ul>${docs||'<li>No documents</li>'}</ul><h4>Activity & Notes</h4><ul>${activity||'<li>No activity</li>'}</ul>`;el('closejob').onclick=()=>box.classList.add('hide');box.querySelectorAll('[data-document]').forEach(b=>b.onclick=async()=>{try{const link=await call('my_job_document_url',{jobId,documentId:b.dataset.document});if(link.url)window.open(link.url,'_blank','noopener,noreferrer')}catch(e){alert('Unable to open document: '+e.message)}})}catch(e){box.textContent='Unable to load job: '+e.message}}
 async function load(){el('status').textContent='Loading…';try{const [p,d]=await Promise.all([call('profile'),call('my_tasks')]);el('greeting').textContent='Welcome, '+p.staff.display_name;const jobs=Object.fromEntries(d.jobs.map(x=>[x.id,x.title]));el('total').textContent=d.tasks.length;el('progress').textContent=d.tasks.filter(x=>x.status==='In Progress').length;el('completed').textContent=d.tasks.filter(x=>x.status==='Completed').length;el('rows').innerHTML=d.tasks.map(t=>'<tr><td><b>'+esc(t.title)+'</b><small>'+esc(jobs[t.job_id]||'')+'</small></td><td>'+esc(t.due_date||'Not set')+'</td><td>'+esc(t.priority||'Normal')+'</td><td><select aria-label="Status for '+esc(t.title)+'" data-task="'+esc(t.id)+'">'+['To Do','In Progress','Completed'].map(v=>'<option '+(v===t.status?'selected':'')+'>'+v+'</option>').join('')+'</select></td></tr>').join('')||'<tr><td colspan="4">No tasks assigned yet.</td></tr>';el('status').textContent='';await loadJobs();document.querySelectorAll('[data-task]').forEach(e=>e.onchange=async()=>{try{await call('update_task',{taskId:e.dataset.task,status:e.value});await load()}catch(err){el('status').textContent=err.message;await load()}})}catch(err){el('status').textContent=err.message}}
-async function show(){const {data:{session}}=await client.auth.getSession();el('login').classList.toggle('hide',!!session);el('workspace').classList.toggle('hide',!session);el('signout').classList.toggle('hide',!session);if(session)await load()}
-el('loginform').onsubmit=async e=>{e.preventDefault();el('loginmsg').textContent='Sending…';const {error}=await client.auth.signInWithOtp({email:el('email').value.trim(),options:{emailRedirectTo:location.origin+'/employee.html',shouldCreateUser:false}});el('loginmsg').textContent=error?error.message:'Check your email for a secure sign-in link.'};
-el('signout').onclick=async()=>{await client.auth.signOut();await show()};
+let accessCheckInProgress=false;
+async function show(){
+ if(accessCheckInProgress)return;
+ accessCheckInProgress=true;
+ try{
+  const {data:{session}}=await client.auth.getSession();
+  if(!session){location.replace('/login.html');return}
+  const response=await fetch(url+'/functions/v1/blueprint-access',{
+   method:'POST',headers:{'Content-Type':'application/json','apikey':key,'Authorization':'Bearer '+session.access_token},body:'{}'
+  });
+  const access=await response.json();
+  if(!response.ok)throw Error(access.error||'Access denied');
+  const requested=new URLSearchParams(location.search).get('organization');
+  const allowed=(access.organizations||[]).filter(o=>o.role==='employee'||o.role==='admin');
+  const selected=requested?allowed.find(o=>o.id===requested):allowed.length===1?allowed[0]:null;
+  if(!selected){location.replace('/login.html');return}
+  // Existing employee API is scoped to the original Blueprint organization only.
+  // Do not route other tenants to it until backend tenant isolation is complete.
+  if(selected.id!=='7cf3f170-30c2-4b7f-9fbb-166982c3b936'){
+   el('login').classList.remove('hide');
+   el('workspace').classList.add('hide');
+   el('login').innerHTML='<h1>Workspace setup in progress</h1><p>This organization is not yet connected to the employee data service.</p><a href="/login.html">Back to workspace selection</a>';
+   return;
+  }
+  el('login').classList.add('hide');
+  el('workspace').classList.remove('hide');
+  el('signout').classList.remove('hide');
+  await load();
+ }catch(err){
+  el('login').classList.remove('hide');
+  el('workspace').classList.add('hide');
+  el('login').innerHTML='<h1>Unable to open workspace</h1><p id="accessError"></p><a href="/login.html">Return to login</a>';
+  el('accessError').textContent=err.message;
+ }finally{accessCheckInProgress=false}
+}
+el('signout').onclick=async()=>{await client.auth.signOut();location.replace('/login.html')};
 el('refresh').onclick=load;client.auth.onAuthStateChange(()=>setTimeout(show,0));show();
 </script><script>
 async function employeeTaskNotes(taskId,title){
