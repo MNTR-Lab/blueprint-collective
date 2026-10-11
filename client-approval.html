@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Document Review | Blueprint Collective</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#192b45;background:#f1f5fa}*{box-sizing:border-box}body{margin:0}.top{background:#142b48;color:white;padding:22px max(20px,calc((100vw - 980px)/2));font-weight:750;font-size:22px}.wrap{max-width:980px;margin:38px auto;padding:0 20px}.card{background:white;border:1px solid #dce5ee;border-radius:16px;padding:28px;box-shadow:0 6px 24px #152d4910}.muted{color:#61738b}h1{margin:0 0 12px;font-size:28px}h2{font-size:20px}.pill{display:inline-block;border-radius:30px;background:#eaf0f8;padding:7px 12px;font-size:13px}.document{margin:24px 0;padding:16px;background:#f7f9fc;border:1px solid #e0e8f0;border-radius:12px}iframe{width:100%;height:500px;border:0;background:white}img.preview{max-width:100%;max-height:650px;display:block;margin:auto}.btn{border:0;background:#214e83;color:white;border-radius:9px;padding:13px 20px;font-size:15px;font-weight:650;cursor:pointer}.btn.secondary{background:#edf2f8;color:#193b60}.buttons{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}textarea{width:100%;min-height:115px;padding:12px;border:1px solid #c9d5e2;border-radius:9px;font:inherit}button:disabled{opacity:.5;cursor:wait}.error{color:#a32638}.success{color:#17623c}a{color:#214e83}.note{font-size:13px;color:#66788f;margin-top:24px}@media(max-width:640px){.card{padding:18px}iframe{height:380px}}
+</style></head><body><header class="top">Blueprint Collective</header><main class="wrap"><div class="card" id="app"><h1>Document Review</h1><p>Loading your approval request…</p></div></main>
+<script>
+const API='https://lbheezjanvalalinqxcd.supabase.co/functions/v1/blueprint-client-approval';
+const token=new URLSearchParams(location.search).get('token')||'';
+const app=document.getElementById('app');
+const escapeHtml=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function call(action,extra={}){
+ const response=await fetch(API,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,action,...extra}),cache:'no-store'});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Request failed');return data;
+}
+let request=null;
+async function load(){
+ try{
+  request=await call('details');const j=request.job,d=request.document;
+  const type=d.content_type||'',safe=escapeHtml(d.filename);
+  const preview=type==='application/pdf'?'<iframe title="Document preview" id="preview"></iframe>':type.startsWith('image/')?'<img class="preview" alt="Document preview" id="preview">':'<p>Preview unavailable for this file type. Use the download link.</p>';
+  app.innerHTML='<h1>Document Approval</h1><p class="muted">Please review the document below and provide your decision.</p><p><span class="pill">'+escapeHtml(j.job_number)+'</span></p><h2>'+escapeHtml(j.title)+'</h2><p class="muted">Client: '+escapeHtml(j.client_name)+'</p><div class="document"><strong>'+safe+'</strong><p><a id="download" target="_blank" rel="noopener noreferrer">Open / Download Document</a></p>'+preview+'</div><section id="decision"></section><p class="note">This link is private. Do not forward it to anyone who should not review this document.</p>';
+  document.getElementById('download').href=d.url;
+  const view=document.getElementById('preview');if(view)view.src=d.url;
+  if(request.completed){document.getElementById('decision').innerHTML='<p class="pill">Status: '+escapeHtml(request.status)+'</p>'+(request.review_note?'<p>'+escapeHtml(request.review_note)+'</p>':'');return}
+  document.getElementById('decision').innerHTML='<h2>Your decision</h2><p>Approve this document, or describe the changes you need.</p><label for="note">Requested changes / comments</label><textarea id="note" placeholder="Describe changes here if needed"></textarea><div class="buttons"><button class="btn" onclick="submitDecision(&quot;Approved&quot;)">Approve Document</button><button class="btn secondary" onclick="submitDecision(&quot;Changes Requested&quot;)">Request Changes</button></div><p id="feedback" role="status"></p>';
+ }catch(e){app.innerHTML='<h1>Document Review</h1><p class="error">'+escapeHtml(e.message)+'</p><p class="muted">The link may have expired or been revoked. Contact the team that sent it to request a new link.</p>'}
+}
+async function submitDecision(decision){
+ const note=document.getElementById('note').value.trim();
+ if(decision==='Changes Requested'&&!note){document.getElementById('feedback').textContent='Please describe the changes you need.';return}
+ if(!confirm(decision==='Approved'?'Approve this document?':'Submit your requested changes?'))return;
+ document.querySelectorAll('button').forEach(b=>b.disabled=true);
+ try{await call('review',{decision,note});app.innerHTML='<h1>Response Submitted</h1><p class="success">Thank you. Your response has been recorded successfully.</p><p><strong>Decision:</strong> '+escapeHtml(decision)+'</p><p class="muted">You can close this page.</p>'}
+ catch(e){document.getElementById('feedback').textContent=e.message;document.querySelectorAll('button').forEach(b=>b.disabled=false)}
+}
+load();
+</script></body></html>
