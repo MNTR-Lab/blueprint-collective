@@ -1770,7 +1770,7 @@ render=function(){
    by organization, pending the production database/API integration. */
 (function(){
 const defaults=['Artwork & Design','Materials & Ordering','Production','Quality Control','Delivery & Fulfillment'];
-let bcProdWorkloadEmployee='all',selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdLoading=false,bcProdError='';
+let bcProdWorkloadEmployee='all',selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdFulfillments=[],bcProdLoading=false,bcProdError='';
 const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||'default');
 const stages=()=>bcProdStages.map(x=>x.name);
 const progress=()=>{
@@ -1784,7 +1784,7 @@ async function bcProdLoad(){
  try{
   let data=await bcJobsRequest({action:'productionLoad'});
   if(!data.stages?.length){await bcJobsRequest({action:'productionSeed'});data=await bcJobsRequest({action:'productionLoad'});}
-  bcProdStages=data.stages||[];bcProdEntries=data.entries||[];bcProdEmployees=data.employees||[];
+  bcProdStages=data.stages||[];bcProdEntries=data.entries||[];bcProdEmployees=data.employees||[];bcProdFulfillments=data.fulfillments||[];
  }catch(err){bcProdError=String(err?.message||err);}
  finally{bcProdLoading=false;if(page==='production'||page==='production-settings')render();}
 }
@@ -1843,6 +1843,29 @@ function workloadPage(){
  (filtered.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.target||'9999').localeCompare(b.target||'9999')).map(r=>'<tr style="border-top:1px solid #e5e7eb"><td style="padding:10px">'+e(r.name)+'</td><td style="padding:10px">'+e(r.job.job_number||'Job')+' · '+e(r.job.title||'')+'</td><td style="padding:10px">'+e(r.stage.name)+'</td><td style="padding:10px">'+e(r.status)+'</td><td style="padding:10px">'+(r.target?e(r.target)+(r.target<today&&r.status!=='Completed'?' <b style="color:#b42318">Overdue</b>':''):'—')+'</td><td style="padding:10px"><button class="btn secondary" onclick="bcProdSelect(\''+e(r.job.id)+'\')">Open Job</button></td></tr>').join('')||'<tr><td colspan="6" style="padding:16px" class="muted">No production assignments for this selection.</td></tr>')+'</tbody></table></div></section>';
 }
 window.bcProdWorkloadFilter=value=>{bcProdWorkloadEmployee=value;render()};
+function bcFulfillmentPanel(job){
+ const f=bcProdFulfillments.find(x=>x.job_id===job.id)||{};
+ const option=(arr,v)=>arr.map(x=>'<option '+(x===v?'selected':'')+'>'+e(x)+'</option>').join('');
+ return '<section class="bc-prod-panel" style="margin-top:18px"><h3>Delivery &amp; Fulfillment</h3>'+
+ '<p class="muted">Save shipment or pickup information. Automated customer emails will activate after an outbound email service is connected; saving a tracking number does not send an email yet.</p>'+
+ '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+ '<div><label>Fulfillment method</label><select id="bcFulfillMethod">'+option(['Shipping','Pickup','Local Delivery'],f.method||'Shipping')+'</select></div>'+
+ '<div><label>Fulfillment status</label><select id="bcFulfillStatus">'+option(['Pending','Ready for Pickup','Shipped','Delivered','Picked Up'],f.status||'Pending')+'</select></div>'+
+ '<div><label>Shipping carrier</label><input id="bcFulfillCarrier" placeholder="UPS, FedEx, USPS…" value="'+e(f.carrier||'')+'"></div>'+
+ '<div><label>Tracking number</label><input id="bcFulfillTracking" placeholder="Enter tracking number" value="'+e(f.tracking_number||'')+'"></div>'+
+ '<div><label>Tracking URL (optional)</label><input id="bcFulfillUrl" type="url" placeholder="https://…" value="'+e(f.tracking_url||'')+'"></div>'+
+ '<div><label>Customer email</label><input id="bcFulfillEmail" type="email" placeholder="client@example.com" value="'+e(f.recipient_email||'')+'"></div></div>'+
+ '<p class="muted" style="margin-top:12px">Client notification: <b>'+e(f.notification_status||'Not Sent')+'</b></p>'+
+ '<button class="btn" onclick="bcFulfillmentSave(\\''+e(job.id)+'\\')">Save Fulfillment</button></section>';
+}
+window.bcFulfillmentSave=async jobId=>{
+ const v=id=>document.getElementById(id)?.value||'';
+ try{
+  const r=await bcJobsRequest({action:'fulfillmentSave',jobId,method:v('bcFulfillMethod'),status:v('bcFulfillStatus'),carrier:v('bcFulfillCarrier'),trackingNumber:v('bcFulfillTracking'),trackingUrl:v('bcFulfillUrl'),recipientEmail:v('bcFulfillEmail')});
+  await bcProdLoad();
+  alert('Fulfillment saved. Customer email has not been sent; email integration is the next step.');
+ }catch(err){alert('Unable to save fulfillment: '+String(err.message||err))}
+};
 function productionPage(){
  const jobs=activeJobs(), names=stages(), all=progress();
  const job=jobs.find(j=>String(j.id)===String(selectedJob))||jobs[0];
@@ -1867,7 +1890,7 @@ function productionPage(){
  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div><label>Target date</label><input type="date" value="'+e(r.target||'')+'" onchange="bcProdField('+i+',\'target\',this.value)"></div><div><label>Completed date</label><input type="date" value="'+e(r.completed||'')+'" onchange="bcProdField('+i+',\'completed\',this.value)"></div></div>'+
  '<label>Production notes</label><textarea rows="2" placeholder="Notes for this stage" onchange="bcProdField('+i+',\'notes\',this.value)">'+e(r.notes||'')+'</textarea></div>'}).join('')+'</div>':
  '<h3>Select a job</h3><p class="muted">Jobs appear here after their approval status reaches Ready for Production.</p>')+
- '</section></div>';
+ '</section></div>'+(job?bcFulfillmentPanel(job):'');
 }
 function settingsPage(){
  const names=stages();
