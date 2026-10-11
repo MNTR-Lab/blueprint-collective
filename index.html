@@ -2606,4 +2606,56 @@ bcInboxDetail=function(m){
 const bcThreadIntegrationOldOpen=bcOpenInboxMessage;
 bcOpenInboxMessage=function(id){bcThreadLinkNotice='';return bcThreadIntegrationOldOpen(id)};
 </script>
+
+<script>
+/* Put client/job association immediately below the workflow status panel. */
+const bcAssociationPreviousDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ if(!m)return bcAssociationPreviousDetail(m);
+ const html=bcAssociationPreviousDetail(m);
+ const wrapper=document.createElement('div');wrapper.innerHTML=html;
+ // Remove the old client form and job association form from the expanded message details.
+ const oldClient=wrapper.querySelector('#bcEmailClientSelect');
+ if(oldClient){
+  const card=oldClient.closest('div[style*="border:1px solid"]');
+  if(card)card.remove();
+ }
+ const oldJob=wrapper.querySelector('#bcMailJobSelect');
+ if(oldJob){
+  const heading=[...wrapper.querySelectorAll('h4')].find(x=>x.textContent.trim()==='Associated Job');
+  if(heading){
+   const section=heading.parentElement;
+   if(section&&section.contains(oldJob))section.remove();
+  }
+ }
+ const incoming=bcThreadIncoming(m);
+ const client=bcEmailClientMatch(m);
+ const linked=bcMailJobLinks.find(x=>incoming.some(y=>String(y.id)===String(x.email_id)));
+ const job=bcCoreJobs.find(x=>String(x.id)===String(linked?.job_id));
+ const clients=[...bcClients].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ const clientOpts=clients.map(c=>'<option value="'+bcInboxEscape(String(c.id))+'" '+(client&&String(c.id)===String(client.id)?'selected':'')+'>'+bcInboxEscape(c.name||'Client')+'</option>').join('');
+ const jobs=[...bcCoreJobs].sort((a,b)=>String(a.job_number||a.title||'').localeCompare(String(b.job_number||b.title||'')));
+ const jobOpts=jobs.map(j=>'<option value="'+bcInboxEscape(String(j.id))+'" '+(job&&String(job.id)===String(j.id)?'selected':'')+'>'+bcInboxEscape((j.job_number||'')+' · '+(j.title||'Untitled'))+'</option>').join('');
+ const id=bcInboxEscape(String(m.id));
+ const count=incoming.length;
+ const panel=document.createElement('section');
+ panel.className='bc-email-association-top';
+ panel.style.cssText='border:1px solid #dce4ee;border-radius:9px;padding:14px 16px;margin:12px 0;background:#fff';
+ panel.innerHTML='<strong style="display:block;margin-bottom:12px">Client &amp; Job Association</strong>'+
+ '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">'+
+ '<div><label for="bcEmailClientSelect" style="display:block;font-weight:600;margin-bottom:6px">Client</label>'+
+ '<select class="bc-job-status-select" style="width:100%" id="bcEmailClientSelect"><option value="">Choose a client…</option>'+clientOpts+'</select>'+
+ '<button type="button" class="btn secondary" style="margin-top:8px" '+(bcThreadLinkBusy?'disabled':'')+' onclick="bcThreadLinkClient(\''+id+'\')">Link Conversation to Client ('+count+')</button></div>'+
+ '<div><label for="bcMailJobSelect" style="display:block;font-weight:600;margin-bottom:6px">Job</label>'+
+ '<select class="bc-job-status-select" style="width:100%" id="bcMailJobSelect"><option value="">Choose a job…</option>'+jobOpts+'</select>'+
+ '<button type="button" class="btn secondary" style="margin-top:8px" '+(bcThreadLinkBusy?'disabled':'')+' onclick="bcThreadLinkJob(\''+id+'\')">Link Conversation to Job ('+count+')</button></div></div>'+
+ (job?'<div style="margin-top:10px"><button type="button" class="btn secondary" onclick="bcThreadOpenJob(\''+bcInboxEscape(String(job.id))+'\')">Open Linked Job: '+bcInboxEscape(job.job_number||job.title||'Job')+'</button></div>':'')+
+ (bcThreadLinkNotice?'<p class="notice" style="margin-top:10px">'+bcInboxEscape(bcThreadLinkNotice)+'</p>':'');
+ const statusHeading=[...wrapper.querySelectorAll('strong')].find(x=>x.textContent.trim().toLowerCase()==='conversation assignment & status');
+ const statusCard=statusHeading?.parentElement;
+ if(statusCard)statusCard.insertAdjacentElement('afterend',panel);
+ else wrapper.insertBefore(panel,wrapper.firstChild);
+ return wrapper.innerHTML;
+};
+</script>
 </body></html>
