@@ -2828,7 +2828,7 @@ function bcHasActionableTasks(){
 }
 const bcOriginalSidebarDot=bcSidebarDot;
 bcSidebarDot=function(id,on){
- if(id==='tasks')on=!!on||bcHasActionableTasks();
+ if(id==='tasks')on=bcHasActionableTasks();
  return bcOriginalSidebarDot(id,on);
 };
 const bcOriginalTasksMarkSeen=bcTasksMarkSeen;
@@ -2836,10 +2836,17 @@ bcTasksMarkSeen=function(){
  bcOriginalTasksMarkSeen();
  if(bcHasActionableTasks())bcSidebarDot('tasks',true);
 };
+/* Single source of truth: never retain the obsolete browser-local "new task" flag. */
 const bcPersistentTaskRender=render;
 render=function(){
+ bcTasksHasNew=bcHasActionableTasks();
  bcPersistentTaskRender();
- if(bcHasActionableTasks())bcSidebarDot('tasks',true);
+ bcOriginalSidebarDot('tasks',bcHasActionableTasks());
+};
+/* Existing local task snapshot polling must not revive a cleared notification. */
+bcTasksPoll=function(){
+ bcTasksHasNew=bcHasActionableTasks();
+ bcOriginalSidebarDot('tasks',bcTasksHasNew);
 };
 </script>
 </body></html>
