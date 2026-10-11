@@ -2806,7 +2806,7 @@ function bcEmailFollowupsPending(){return bcEmailFollowups.some(t=>t.status!=='C
 const bcEmailDotOldRender=render;
 render=function(){
  bcEmailDotOldRender();
- if(bcEmailFollowupsPending()){
+ if(bcEmailFollowupsPending()||bcAllTasks.some(t=>t.status!=='Completed')){
   const nav=document.getElementById('nav');
   const button=nav&&[...nav.querySelectorAll('button')].find(b=>b.textContent.includes('Tasks & Activities'));
   if(button&&!button.querySelector('.bc-new-mail-dot')){
@@ -2817,6 +2817,29 @@ render=function(){
    button.appendChild(dot);
   }
  }
+};
+</script>
+
+<script>
+/* Keep the Tasks navigation indicator tied to outstanding work, not page visits. */
+function bcHasActionableTasks(){
+ return (Array.isArray(bcAllTasks)&&bcAllTasks.some(t=>t.status!=='Completed'))||
+        (Array.isArray(bcEmailFollowups)&&bcEmailFollowups.some(t=>t.status!=='Completed'));
+}
+const bcOriginalSidebarDot=bcSidebarDot;
+bcSidebarDot=function(id,on){
+ if(id==='tasks')on=!!on||bcHasActionableTasks();
+ return bcOriginalSidebarDot(id,on);
+};
+const bcOriginalTasksMarkSeen=bcTasksMarkSeen;
+bcTasksMarkSeen=function(){
+ bcOriginalTasksMarkSeen();
+ if(bcHasActionableTasks())bcSidebarDot('tasks',true);
+};
+const bcPersistentTaskRender=render;
+render=function(){
+ bcPersistentTaskRender();
+ if(bcHasActionableTasks())bcSidebarDot('tasks',true);
 };
 </script>
 </body></html>
