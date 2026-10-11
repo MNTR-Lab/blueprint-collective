@@ -2109,4 +2109,49 @@ setInterval(()=>{if(bcSession&&!document.hidden)bcLoadProductionAlerts()},30000)
  if(page==='dashboard')load();
 })();
 </script>
+
+<style>
+.bc-directory-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0 24px}
+.bc-directory-stat{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:19px}
+.bc-directory-stat strong{display:block;font-size:27px;color:#132b47;margin-top:7px}
+.bc-directory-stat span{color:#64748b;font-size:13px}
+.bc-directory-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.bc-directory-toolbar input,.bc-directory-toolbar select{padding:11px 13px;border:1px solid #d5deeb;border-radius:9px;background:white;min-width:180px}
+.bc-directory-table{width:100%;border-collapse:collapse}
+.bc-directory-table th{text-align:left;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:13px;border-bottom:1px solid #e4eaf2}
+.bc-directory-table td{padding:15px 13px;border-bottom:1px solid #edf1f6;vertical-align:middle}
+.bc-directory-person{display:flex;align-items:center;gap:12px}
+.bc-directory-avatar{width:40px;height:40px;border-radius:12px;background:#eaf0f8;color:#193a60;display:grid;place-items:center;font-weight:800;flex-shrink:0}
+.bc-directory-person small{display:block;color:#64748b;margin-top:4px}
+.bc-directory-pill{display:inline-block;border-radius:999px;padding:5px 10px;font-size:12px;background:#f1f5f9;color:#42526b}
+.bc-directory-pill.active{background:#e7f7ef;color:#15754b}
+.bc-directory-actions{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:800px){.bc-directory-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-directory-table{min-width:720px}}
+</style>
+<script>
+/* Team Directory: full-page workspace; existing employee forms and invitation backend retained. */
+let bcDirectorySearch='',bcDirectoryFilter='all';
+function bcStaffDirectory(){
+ if(page!=='team-directory')page='team-directory';
+ try{closeModal()}catch(e){}
+ const v=document.getElementById('view');if(!v)return;
+ const staff=Array.isArray(bcStaff)?bcStaff:[];
+ const total=staff.length,active=staff.filter(x=>x.active).length,admins=staff.filter(x=>x.role==='Business Admin').length,pending=staff.filter(x=>x.active&&!x.user_id).length;
+ const filtered=staff.filter(x=>(bcDirectoryFilter==='all'||(bcDirectoryFilter==='active'?x.active:bcDirectoryFilter==='inactive'?!x.active:!x.user_id&&x.active))&&[x.display_name,x.email,x.role].some(y=>String(y||'').toLowerCase().includes(bcDirectorySearch.toLowerCase())));
+ const rows=filtered.map(x=>{
+ const id=String(x.id).replace(/[^a-zA-Z0-9_-]/g,'');
+ const initials=String(x.display_name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+ return '<tr><td><div class="bc-directory-person"><span class="bc-directory-avatar">'+esc(initials)+'</span><div><strong>'+esc(x.display_name||'Unnamed employee')+'</strong><small>'+esc(x.email||'No email address')+'</small></div></div></td>'+
+ '<td>'+esc(x.role||'Employee')+'</td><td><span class="bc-directory-pill '+(x.active?'active':'')+'">'+(x.active?'Active':'Inactive')+'</span></td>'+
+ '<td><span class="bc-directory-pill">'+(x.user_id?'Account linked':!x.active?'Inactive':!x.email?'Email required':'Invitation pending')+'</span></td>'+
+ '<td><div class="bc-directory-actions"><button class="btn secondary" onclick="bcStaffForm(\''+id+'\')">Edit</button>'+(x.active&&x.email?'<button class="btn secondary" id="bcInviteBtn_'+id+'" onclick="bcInviteEmployee(\''+id+'\')">'+(x.user_id?'Resend Invite':'Send Invite')+'</button>':'')+'</div></td></tr>';
+ }).join('');
+ v.innerHTML='<div class="heading"><div><h2>Team Directory</h2><p>Manage employee profiles, access and secure invitations.</p></div><button class="btn" onclick="bcStaffForm()">+ Add Employee</button></div>'+
+ '<div class="bc-directory-stats">'+[['Total Team',total],['Active Employees',active],['Business Admins',admins],['Awaiting Invitation',pending]].map(a=>'<div class="bc-directory-stat"><span>'+a[0]+'</span><strong>'+a[1]+'</strong></div>').join('')+'</div>'+
+ '<section class="panel"><div class="heading"><div><h3>Employees</h3><p>'+filtered.length+' of '+total+' team members</p></div><button class="btn secondary" onclick="bcOpenTeamDirectory()">Refresh Directory</button></div>'+
+ '<div class="bc-directory-toolbar"><input id="bcDirectorySearch" placeholder="Search name, email or role…" value="'+esc(bcDirectorySearch)+'" oninput="bcDirectorySearch=this.value;bcStaffDirectory();document.getElementById(\'bcDirectorySearch\').focus()">'+
+ '<select onchange="bcDirectoryFilter=this.value;bcStaffDirectory()">'+[['all','All employees'],['active','Active'],['inactive','Inactive'],['pending','Awaiting invitation']].map(a=>'<option value="'+a[0]+'" '+(bcDirectoryFilter===a[0]?'selected':'')+'>'+a[1]+'</option>').join('')+'</select></div>'+
+ '<div class="tablewrap"><table class="bc-directory-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th>Access</th><th>Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5" class="empty">No employees match your search.</td></tr>')+'</tbody></table></div></section>';
+}
+</script>
 </body></html>
