@@ -2658,4 +2658,92 @@ bcInboxDetail=function(m){
  return wrapper.innerHTML;
 };
 </script>
+
+<script>
+/* Conservative automatic association: existing explicit links win; never guess among multiple matches. */
+let bcAutoAssocBusy=false,bcAutoAssocLastError='',bcAutoAssocInFlight=new Set();
+function bcAutoAssocJobNumber(subject,jobs){
+ const text=String(subject||'');
+ const matches=jobs.filter(j=>{
+  const n=String(j.job_number||'').trim();
+  if(!n||n.length<4)return false;
+  const escaped=n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp('(^|[^a-z0-9])'+escaped+'(?=$|[^a-z0-9])','i').test(text);
+ });
+ return matches.length===1?matches[0]:null;
+}
+async function bcAutoAssociateConversations(){
+ if(bcAutoAssocBusy||!bcSession?.access_token||!bcInboxMessages.length)return;
+ if(!bcLoaded)return;
+ bcAutoAssocBusy=true;
+ try{
+  if(!bcJobsLoaded)await bcCoreLoadJobs();
+  const byThread=new Map();
+  for(const m of bcInboxMessages){const key=bcMailThreadKey(m);if(!byThread.has(key))byThread.set(key,[]);byThread.get(key).push(m)}
+  for(const [key,items] of byThread){
+   if(bcAutoAssocInFlight.has(key))continue;
+   bcAutoAssocInFlight.add(key);
+   try{
+    const clientIds=[...new Set(items.map(m=>m.linked_client_external_id).filter(Boolean).map(String))];
+    const sender=bcClientEmailAddress(items[0].sender);
+    const matches=bcClients.filter(c=>sender&&bcClientEmailAddress(c.email)===sender);
+    const client=clientIds.length===1?bcClients.find(c=>String(c.id)===clientIds[0]):clientIds.length===0&&matches.length===1?matches[0]:null;
+    // Do not override a manually assigned client or resolve conflicting assignments automatically.
+    if(client&&clientIds.length<=1){
+     for(const m of items){
+      if(m.linked_client_external_id!=null)continue;
+      const result=await bcMailJobRequest('link',{messageId:String(m.id),clientId:String(client.id)});
+      m.linked_client_external_id=result.message.linked_client_external_id;
+     }
+    }
+    const existingIds=[...new Set(bcMailJobLinks.filter(l=>items.some(m=>String(m.id)===String(l.email_id))).map(l=>String(l.job_id)))];
+    let job=null;
+    if(existingIds.length===1)job=bcCoreJobs.find(j=>String(j.id)===existingIds[0]);
+    else if(existingIds.length===0){
+     const candidate=bcAutoAssocJobNumber(items[0].subject,bcCoreJobs);
+     if(candidate&&client&&String(candidate.client_external_id)===String(client.id))job=candidate;
+    }
+    if(job&&existingIds.length<=1){
+     for(const m of items){
+      if(bcMailJobLinks.some(l=>String(l.email_id)===String(m.id)))continue;
+      await bcMailJobRequest('linkJob',{emailId:String(m.id),jobId:String(job.id)});
+      bcMailJobLinks.push({email_id:m.id,job_id:job.id});
+     }
+    }
+   }catch(e){bcAutoAssocLastError=e.message||String(e);console.warn('Automatic correspondence association',e)}
+   finally{bcAutoAssocInFlight.delete(key)}
+  }
+ }finally{bcAutoAssocBusy=false;if(page==='email')render()}
+}
+const bcAutoOldInboxDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ let html=bcAutoOldInboxDetail(m);
+ if(!m)return html;
+ const container=document.createElement('div');container.innerHTML=html;
+ container.querySelectorAll('.bc-email-association-top').forEach(el=>el.remove());
+ // Remove legacy manual client/job controls from message details, including hidden forms.
+ container.querySelectorAll('#bcEmailClientSelect,#bcMailJobSelect').forEach(el=>{
+  const form=el.closest('div[style*="border:1px solid"],div[style*="border: 1px solid"]');
+  if(form)form.remove();else el.remove();
+ });
+ container.querySelectorAll('button').forEach(b=>{
+  if(/^(Save Link|Unlink|Save Job Link|Link Conversation to (Client|Job))/i.test(b.textContent.trim()))b.remove();
+ });
+ const items=bcThreadIncoming(m);
+ const clientIds=[...new Set(items.map(x=>x.linked_client_external_id).filter(Boolean).map(String))];
+ const client=clientIds.length===1?bcClients.find(c=>String(c.id)===clientIds[0]):null;
+ const links=bcMailJobLinks.filter(l=>items.some(x=>String(x.id)===String(l.email_id)));
+ const jobIds=[...new Set(links.map(l=>String(l.job_id)))];
+ const job=jobIds.length===1?bcCoreJobs.find(j=>String(j.id)===jobIds[0]):null;
+ const summary=document.createElement('section');summary.style.cssText='border:1px solid #dce4ee;border-radius:9px;padding:12px 16px;margin:12px 0';
+ summary.innerHTML='<strong>Automatic Client &amp; Job Matching</strong><p style="margin:8px 0 0">Client: <b>'+bcInboxEscape(client?.name||'Unmatched')+'</b> &nbsp;·&nbsp; Job: <b>'+bcInboxEscape(job?.job_number||job?.title||'Unmatched')+'</b></p>'+
+ (job?'<button class="btn secondary" type="button" style="margin-top:9px" onclick="bcThreadOpenJob(\''+bcInboxEscape(job.id)+'\')">Open Linked Job</button>':'');
+ const heading=[...container.querySelectorAll('strong')].find(el=>el.textContent.trim().toLowerCase()==='conversation assignment & status');
+ if(heading?.parentElement)heading.parentElement.insertAdjacentElement('afterend',summary);
+ else container.insertBefore(summary,container.firstChild);
+ return container.innerHTML;
+};
+const bcAutoOldLoadInbox=bcLoadInbox;
+bcLoadInbox=async function(){await bcAutoOldLoadInbox();await bcMailLoadJobLinks();await bcAutoAssociateConversations()};
+</script>
 </body></html>
