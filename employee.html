@@ -415,14 +415,28 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  window.bcViewAssignedJob=viewAssignedJob;
  async function enhanceNotifications(){
   const box=document.getElementById('notificationlist');if(!box)return;
-  let notifications;
-  try{notifications=(await call('notifications_list')).items||[]}catch(e){return}
+  let notifications,jobs;
+  try{
+   [notifications,jobs]=await Promise.all([call('notifications_list'),call('my_jobs')]);
+  }catch(e){console.warn('Unable to resolve notification jobs',e);return}
+  const allowedJobs=jobs.jobs||[];
+  const ordered=[...(notifications.items||[]).filter(n=>!n.read_at),...(notifications.items||[]).filter(n=>!!n.read_at)];
   const displayed=[...box.querySelectorAll('#bcActiveNotifications > div, #bcArchivedNotifications > div > div')];
-  for(const [index,n] of [...notifications.filter(x=>!x.read_at),...notifications.filter(x=>!!x.read_at)].entries()){
-   const row=displayed[index];if(!row||!n.job_id||row.querySelector('[data-view-assignment]'))continue;
+  for(const [index,n] of ordered.entries()){
+   const row=displayed[index];if(!row||row.querySelector('[data-view-assignment]'))continue;
+   let match=allowedJobs.find(j=>String(j.id)===String(n.job_id||''));
+   if(!match){
+    const content=[n.title,n.message].filter(Boolean).join(' ');
+    const references=[...content.matchAll(/\bBC-[A-Z0-9]+\b/gi)].map(m=>m[0].toUpperCase());
+    const matches=allowedJobs.filter(j=>references.some(ref=>[j.job_number,j.job_code,j.title,j.name].filter(Boolean).some(value=>String(value).toUpperCase().includes(ref))));
+    if(matches.length===1)match=matches[0];
+   }
+   if(!match)continue;
    const button=document.createElement('button');button.type='button';button.className='secondary';
-   button.dataset.viewAssignment=String(n.job_id);button.textContent='View Job';button.style.marginRight='8px';
-   button.onclick=()=>viewAssignedJob(n.job_id);row.appendChild(button);
+   button.dataset.viewAssignment=String(match.id);button.textContent='View Job';button.style.marginRight='8px';
+   button.onclick=()=>viewAssignedJob(match.id);
+   const markRead=row.querySelector('[data-notification]');
+   if(markRead)row.insertBefore(button,markRead);else row.appendChild(button);
   }
  }
  const previousRefresh=refreshEmployeeNotifications;
@@ -441,6 +455,7 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  }
  const originalLoadJobs=loadJobs;
  loadJobs=async function(){const r=await originalLoadJobs();await enhanceAssignments();return r};
+ setTimeout(()=>{if(!document.getElementById('workspace')?.classList.contains('hide'))enhanceNotifications()},1200);
  const root=document.getElementById('jobcards');
  if(root)new MutationObserver(()=>{queueMicrotask(enhanceAssignments)}).observe(root,{childList:true});
 })();
