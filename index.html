@@ -192,7 +192,7 @@ async function bcCall(action,extra={}){
   if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60){if(!await bcRefreshSession())throw Error('Session expired. Please sign in again.')}
   const r=await fetch(BC_FN,{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify({action,...extra})});
   const j=await r.json().catch(()=>({error:'Unexpected server response'}));
-  if(!r.ok)throw Error(j.error||'Request failed ('+r.status+')');
+  if(!r.ok){const detail=typeof j.error==='string'?j.error:(j.error?.message||j.message||JSON.stringify(j.error||j));throw Error(detail||'Request failed ('+r.status+')');}
   return j;
 }
 function bcCol(item,id){return (item.column_values||[]).find(c=>c.id===id)?.text||''}
@@ -3196,6 +3196,48 @@ render=function(){
  if(root)new MutationObserver(()=>{if(!busy)queueMicrotask(reconcile)}).observe(root,{childList:true,subtree:true});
  document.addEventListener('click',e=>{if(e.target.closest('[data-page="tasks"], [onclick*="tasks"]'))queueMicrotask(reconcile)});
  queueMicrotask(reconcile);
+})();
+</script>
+<script>
+/* Blueprint Collective — administrator task-note notification inbox. */
+(function(){
+ if(!Array.isArray(navs)||navs.some(n=>n[0]==='admin-notifications'))return;
+ const pos=navs.findIndex(n=>n[0]==='team-directory');
+ navs.splice(pos+1,0,['admin-notifications','◉','Notifications']);
+ let notices=[],busy=false,unread=0;
+ const escapeHtml=v=>esc(String(v??''));
+ function content(){
+  return '<div class="heading"><div><h2>Notifications</h2><p>Task updates from your team that still need your attention.</p></div><button class="btn secondary" onclick="bcAdminNoticeRefresh()">Refresh</button></div>'+
+  '<section class="panel">'+(busy?'<p>Loading notifications…</p>':!notices.length?'<p class="muted">You are all caught up. There are no unread task notes.</p>':
+  '<div style="display:grid;gap:10px">'+notices.map(n=>'<div style="border:1px solid #d9e1e8;border-radius:10px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><strong>'+escapeHtml(n.jobTitle)+' — '+escapeHtml(n.taskTitle)+'</strong><div style="margin-top:4px">'+escapeHtml(n.author)+' added a task note</div><div class="muted" style="margin-top:4px">'+escapeHtml(n.preview)+'</div><small class="muted">'+escapeHtml(n.createdAt?new Date(n.createdAt).toLocaleString():'')+'</small></div><button class="btn" onclick="bcAdminNoticeOpen('+JSON.stringify(n.taskId).replace(/"/g,'&quot;')+')">Review Note</button></div>').join('')+'</div>')+'</section>';
+ }
+ function paint(){
+  const nav=document.querySelector('#nav button[onclick="navigate(\'admin-notifications\')"]');
+  if(nav){let dot=nav.querySelector('.bc-admin-notice-dot');if(unread&&!dot){dot=document.createElement('span');dot.className='bc-admin-notice-dot bc-new-mail-dot';dot.title='Unread task notes';nav.appendChild(dot)}else if(!unread&&dot)dot.remove()}
+  if(page==='admin-notifications'){document.getElementById('topTitle').textContent='Notifications';document.getElementById('view').innerHTML=content()}
+ }
+ async function load(){
+  if(!bcSession?.access_token)return;
+  busy=true;if(page==='admin-notifications')paint();
+  try{const r=await bcCall('task_note_notifications');notices=Array.isArray(r.items)?r.items:[];unread=notices.length}
+  catch(err){console.warn('Administrator notifications:',err);if(page==='admin-notifications')document.getElementById('view').innerHTML='<section class="panel"><h2>Notifications</h2><p>'+escapeHtml(err.message)+'</p><button class="btn secondary" onclick="bcAdminNoticeRefresh()">Retry</button></section>';return}
+  finally{busy=false}
+  paint();
+ }
+ window.bcAdminNoticeRefresh=load;
+ window.bcAdminNoticeOpen=async function(taskId){
+  await bcTaskNotesOpen(String(taskId));
+  await load();
+ };
+ const originalRender=render;
+ render=function(...args){const result=originalRender.apply(this,args);paint();return result};
+ const originalNavigate=navigate;
+ navigate=function(p){const result=originalNavigate(p);if(p==='admin-notifications')load();return result};
+ const oldNotes=bcTaskNotesOpen;
+ bcTaskNotesOpen=async function(...args){const result=await oldNotes.apply(this,args);await load();return result};
+ setTimeout(load,1200);
+ setInterval(()=>{if(!document.hidden)load()},30000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
 })();
 </script>
 </body></html>
