@@ -1770,7 +1770,7 @@ render=function(){
    by organization, pending the production database/API integration. */
 (function(){
 const defaults=['Artwork & Design','Materials & Ordering','Production','Quality Control','Delivery & Fulfillment'];
-let bcProdWorkloadEmployee='all',selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdFulfillments=[],bcProdLoading=false,bcProdError='';
+let bcProdWorkloadEmployee='all',bcProdQueueTab='active',selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdFulfillments=[],bcProdLoading=false,bcProdError='';
 const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||'default');
 const stages=()=>bcProdStages.map(x=>x.name);
 const progress=()=>{
@@ -1886,30 +1886,31 @@ window.bcFulfillmentSave=async jobId=>{
  }catch(err){alert('Unable to save fulfillment: '+String(err.message||err))}
 };
 function productionPage(){
- const jobs=activeJobs(), names=stages(), all=progress();
- const job=jobs.find(j=>String(j.id)===String(selectedJob))||jobs[0];
+ const allJobs=activeJobs(), jobs=allJobs.filter(j=>bcProdQueueTab==='completed'?['Completed','Closed'].includes(j.status):['Ready for Production','In Production'].includes(j.status)), names=stages(), all=progress();
+ const job=jobs.find(j=>String(j.id)===String(selectedJob))||null;
  if(job)selectedJob=String(job.id);
  const rec=job?(all[String(job.id)]||{}):{};
  const completed=names.filter((_,i)=>rec[i]?.status==='Completed').length;
  const started=names.filter((_,i)=>rec[i]?.status==='In Progress').length;
  const earnedMilestones=completed*2+started;
  const totalMilestones=names.length*2;
- const percent=totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
+ const shipped=job&&bcProdFulfillments.some(f=>f.job_id===job.id&&f.method==='Shipping'&&['Shipped','Delivered'].includes(f.status)&&f.tracking_number);
+ const percent=shipped||['Completed','Closed'].includes(job?.status)?100:totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
  return '<div class="bc-prod-head"><div><h2>Production Management</h2><p class="muted">Track production work for the selected organization.</p></div><div><button class="btn secondary" onclick="bcProdRefresh()">Refresh Jobs</button> <button class="btn secondary" onclick="bcProdSettings()">Workflow Settings</button></div></div>'+
  '<div class="bc-prod-note"><b>Milestone progress:</b> Each stage earns one milestone when In Progress and another when Completed. Progress is recalculated from saved statuses, so changes are never double-counted. On Hold does not earn a milestone.</div>'+ (bcProdError?'<div class="bc-prod-note" style="color:#b42318">'+e(bcProdError)+'</div>':'')+
  summary()+workloadPage()+
- '<div class="bc-prod-grid"><section class="bc-prod-panel"><h3>Production Queue</h3><p class="muted">'+jobs.length+' eligible job(s)</p><div class="bc-prod-list">'+
+ '<div class="bc-prod-grid"><section class="bc-prod-panel"><h3>Job Queue</h3><div style="display:flex;gap:8px;margin:12px 0"><button class="btn '+(bcProdQueueTab==='active'?'':'secondary')+'" onclick="bcProdSwitchTab(\'active\')">Active Jobs ('+allJobs.filter(j=>['Ready for Production','In Production'].includes(j.status)).length+')</button><button class="btn '+(bcProdQueueTab==='completed'?'':'secondary')+'" onclick="bcProdSwitchTab(\'completed\')">Completed / Archived ('+allJobs.filter(j=>['Completed','Closed'].includes(j.status)).length+')</button></div><p class="muted">'+jobs.length+' job(s)</p><div class="bc-prod-list">'+
  (jobs.map(j=>'<button class="bc-prod-item '+(String(j.id)===selectedJob?'selected':'')+'" onclick="bcProdSelect(\''+e(j.id)+'\')"><b>'+e(j.job_number||'Job')+'</b> · '+e(j.title||'Untitled')+'<div class="muted">'+e(j.client_name||'')+' · '+e(j.status)+'</div></button>').join('')||'<p class="muted">No jobs are ready for production yet.</p>')+
  '</div></section><section class="bc-prod-panel">'+(job?
  '<div class="bc-prod-head"><div><h3>'+e(job.job_number||'Job')+' — '+e(job.title||'Untitled')+'</h3><p class="muted">'+e(job.client_name||'')+'</p></div><span class="status green">'+e(job.status)+'</span></div>'+
  '<div><b>'+percent+'% production progress</b><div class="bc-prod-progress"><div style="width:'+percent+'%"></div></div><small class="muted">'+earnedMilestones+' of '+totalMilestones+' milestones reached · '+completed+' stages complete</small></div>'+
- '<div class="bc-prod-stages">'+names.map((name,i)=>{const r=rec[i]||{};return '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>'+(i+1)+'. '+e(name)+'</b><span class="muted">'+e(r.status||'Not Started')+'</span></div>'+
+ '<details class="bc-prod-stage" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;padding:8px 0">View / Edit Production Stages ('+completed+' of '+names.length+' recorded complete)</summary><div class="bc-prod-stages">'+names.map((name,i)=>{const r=rec[i]||{};return '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>'+(i+1)+'. '+e(name)+'</b><span class="muted">'+e(r.status||'Not Started')+'</span></div>'+
  '<label>Stage status</label><select onchange="bcProdField('+i+',\'status\',this.value)">'+statusNames.map(st=>'<option '+((r.status||'Not Started')===st?'selected':'')+'>'+st+'</option>').join('')+'</select>'+
  '<label>Assigned to</label><select onchange="bcProdField('+i+',\'employeeId\',this.value)"><option value="">Unassigned</option>'+bcProdEmployees.filter(x=>x.active||x.id===r.employeeId).map(x=>'<option value="'+e(x.id)+'" '+(r.employeeId===x.id?'selected':'')+'>'+e(x.full_name)+(x.active?'':' (Inactive)')+'</option>').join('')+'</select>'+(!r.employeeId&&r.assignee?'<small class="muted">Previous assignment: '+e(r.assignee)+'</small>':'')+
  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div><label>Target date</label><input type="date" value="'+e(r.target||'')+'" onchange="bcProdField('+i+',\'target\',this.value)"></div><div><label>Completed date</label><input type="date" value="'+e(r.completed||'')+'" onchange="bcProdField('+i+',\'completed\',this.value)"></div></div>'+
- '<label>Production notes</label><textarea rows="2" placeholder="Notes for this stage" onchange="bcProdField('+i+',\'notes\',this.value)">'+e(r.notes||'')+'</textarea></div>'}).join('')+'</div>':
- '<h3>Select a job</h3><p class="muted">Jobs appear here after their approval status reaches Ready for Production.</p>')+
- '</section></div>'+(job?bcFulfillmentPanel(job):'');
+ '<label>Production notes</label><textarea rows="2" placeholder="Notes for this stage" onchange="bcProdField('+i+',\'notes\',this.value)">'+e(r.notes||'')+'</textarea></div>'}).join('')+'</div></details>':
+ '<h3>Select a job</h3><p class="muted">Choose a job from the '+(bcProdQueueTab==='completed'?'Completed / Archived':'Active Jobs')+' list to view its details.</p>')+
+ '</section></div>'+(job?'<div style="margin-top:16px">'+bcFulfillmentPanel(job)+'</div>':'');
 }
 function settingsPage(){
  const names=stages();
@@ -1931,6 +1932,7 @@ window.bcProdToggleEmployee=async(id,active)=>{
  try{await bcJobsRequest({action:'productionSetEmployeeActive',employeeId:id,active});await bcProdLoad()}
  catch(err){alert('Could not update employee: '+String(err.message||err))}
 };
+window.bcProdSwitchTab=tab=>{bcProdQueueTab=tab;selectedJob='';render()};
 window.bcProdSelect=id=>{selectedJob=String(id);render()};
 window.bcProdField=async(index,field,value)=>{
  if(!selectedJob||!bcProdStages[index])return;
