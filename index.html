@@ -1374,7 +1374,7 @@ bcJobsPage=function(){
  const fileName=id=>docs.find(d=>d.id===id)?.filename||'Document';
  const approvalRows=approvals.map(a=>{
  const status=h(a.status),pending=a.status==='Pending Approval';
- const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button>':'';
+ const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button> <button class="btn" onclick="bcJobClientLink(\''+a.id+'\')">Client Approval Link</button> <button class="btn secondary" onclick="bcJobRevokeClientLink(\''+a.id+'\')">Revoke Links</button>':'';
  return '<div class="bc-workflow-record"><div><strong>'+h(fileName(a.document_id))+'</strong><div class="muted">'+status+' · '+new Date(a.requested_at).toLocaleString()+'</div>'+(a.review_note?'<p>'+h(a.review_note)+'</p>':'')+'</div><div>'+actions+'</div></div>';
  }).join('');
  const revisionRequests=approvals.filter(a=>a.status==='Changes Requested'&&a.revision_status==='Needs Revision');
@@ -1431,6 +1431,25 @@ async function bcJobReview(approvalId,status){
  if(status==='Changes Requested'&&!note.trim()){alert('Please describe the requested changes.');return}
  try{await bcJobsRequest({action:'reviewApproval',id:bcDetailJobId,approvalId,status,note:note.trim()});await bcDetailReload()}
  catch(err){alert('Unable to save decision: '+err.message)}
+}
+async function bcJobClientLink(approvalId){
+ const email=prompt('Client email (optional; for your reference when sharing the link):','');
+ if(email===null)return;
+ try{
+  const data=await bcJobsRequest({action:'createClientApprovalLink',id:bcDetailJobId,approvalId,recipientEmail:email.trim()});
+  const url=data.url;
+  const modal=document.createElement('div');modal.id='bc-client-link-dialog';modal.className='bc-doc-viewer';
+  modal.innerHTML='<div class="bc-doc-viewer-panel" style="max-width:580px;height:auto;padding:24px" role="dialog" aria-modal="true"><h3>Client Approval Link</h3><p>Share this secure link with your client. It expires after 14 days. Anyone with the link can review and respond, so send it privately.</p><input id="bc-client-link-url" readonly style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px" /><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" onclick="bcCopyClientLink()">Copy Link</button><button class="btn secondary" onclick="document.getElementById(\'bc-client-link-dialog\')?.remove()">Close</button></div></div>';
+  document.body.appendChild(modal);document.getElementById('bc-client-link-url').value=url;
+ }catch(e){alert('Unable to create client link: '+e.message)}
+}
+async function bcCopyClientLink(){
+ const input=document.getElementById('bc-client-link-url');if(!input)return;
+ try{await navigator.clipboard.writeText(input.value);alert('Link copied.')}catch(e){input.select();alert('Select and copy the link shown.')}
+}
+async function bcJobRevokeClientLink(approvalId){
+ if(!confirm('Revoke all previously issued client links for this approval?'))return;
+ try{await bcJobsRequest({action:'revokeClientApprovalLinks',id:bcDetailJobId,approvalId});alert('Client links revoked.')}catch(e){alert('Unable to revoke links: '+e.message)}
 }
 async function bcJobViewEmail(emailId,direction){
  const currentJob=bcDetailJobId;
