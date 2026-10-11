@@ -3168,4 +3168,15 @@ render=function(){
  padding:14px;
 }
 </style>
+<script>
+/* Keep the project/production task dropdowns intact after later render wrappers. */
+(function(){
+ const previousRender=render;
+ render=function(){
+  const result=previousRender.apply(this,arguments);
+  if(page==='tasks')bcExpandTaskTables();
+  return result;
+ };
+})();
+</script>
 </body></html>
