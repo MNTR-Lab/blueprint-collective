@@ -867,7 +867,7 @@ if(bcSession&&page==='deals')bcLoadSales();
 <script>
 /* Secure task notes - administrator */
 async function bcTaskNotesOpen(taskId){
- const task=bcAllTasks.find(t=>String(t.id)===String(taskId))||bcJobTasks.find(t=>String(t.id)===String(taskId));
+ const task=(typeof bcCoreJobTasks!=='undefined'?bcCoreJobTasks:[]).find(t=>String(t.id)===String(taskId))||bcAllTasks.find(t=>String(t.id)===String(taskId))||bcJobTasks.find(t=>String(t.id)===String(taskId));
  if(!task)return alert('Task not found. Refresh first.');
  const modal=document.getElementById('modal');
  modal.innerHTML='<h3>Task Notes — '+esc(task.title)+'</h3><p class="notice">Shared with employees assigned to this task. Notes cannot be edited or deleted.</p><div id="bcTaskNotesHistory">Loading…</div><form id="bcTaskNotesForm"><label style="display:block;margin:15px 0 8px;font-weight:650">New note</label><textarea name="note" rows="4" maxlength="5000" required style="width:100%;padding:11px;border:1px solid #ccd8e4;border-radius:8px" placeholder="Progress update, question or issue…"></textarea><p id="bcTaskNotesMsg" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Close</button><button class="btn" type="submit">Save Note</button></div></form>';
@@ -1998,7 +1998,7 @@ function productionPage(){
  const earnedMilestones=completed*2+started;
  const totalMilestones=names.length*2;
  const shipped=job&&bcProdFulfillments.some(f=>f.job_id===job.id&&f.method==='Shipping'&&['Shipped','Delivered'].includes(f.status)&&f.tracking_number);
- const percent=totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
+ const percent=shipped||['Completed','Closed'].includes(job?.status)?100:totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
  return '<div class="bc-prod-head"><div><h2>Production Management</h2><p class="muted">Track production work for the selected organization.</p></div><div><button class="btn secondary" onclick="bcProdRefresh()">Refresh Jobs</button> <button class="btn secondary" onclick="bcProdSettings()">Workflow Settings</button></div></div>'+
  '<div class="bc-prod-note"><b>Milestone progress:</b> Each stage earns one milestone when In Progress and another when Completed. Progress is recalculated from saved statuses, so changes are never double-counted. On Hold does not earn a milestone.</div>'+ (bcProdError?'<div class="bc-prod-note" style="color:#b42318">'+e(bcProdError)+'</div>':'')+
  summary()+workloadPage()+
@@ -3010,7 +3010,7 @@ function bcCoreTaskRow(t){
  '<div class="bc-task-expand-field"><small>Status</small><select class="field" onchange="bcCoreTaskStatus('+JSON.stringify(t.id).replace(/"/g,'&quot;')+',this.value)">'+
  ['To Do','In Progress','Completed'].map(st=>'<option '+(t.status===st?'selected':'')+'>'+st+'</option>').join('')+'</select></div></div>'+
  (t.description?'<p>'+esc(t.description)+'</p>':'')+
- '<div class="bc-task-expand-actions"><button class="btn secondary" onclick="page=\'jobs\';bcDetailOpen('+JSON.stringify(t.job_id).replace(/"/g,'&quot;')+')">Open Job</button></div></div></details>';
+ '<div class="bc-task-expand-actions"><button class="btn secondary" onclick="bcTaskNotesOpen('+JSON.stringify(t.id).replace(/"/g,'&quot;')+')">Task Notes</button> <button class="btn secondary" onclick="page=\'jobs\';bcDetailOpen('+JSON.stringify(t.job_id).replace(/"/g,'&quot;')+')">Open Job</button></div></div></details>';
 }
 async function bcCoreTaskStatus(id,status){
  try{await bcJobsRequest({action:'taskStatus',taskId:id,status});await bcCoreTaskRefresh();}
@@ -3168,4 +3168,44 @@ render=function(){
  padding:14px;
 }
 </style>
+<script>
+/* Keep the project/production task dropdowns intact after later render wrappers. */
+(function(){
+ const previousRender=render;
+ render=function(){
+  const result=previousRender.apply(this,arguments);
+  if(page==='tasks')bcExpandTaskTables();
+  return result;
+ };
+})();
+</script>
+<script>
+/* Persistent task layout: handle asynchronously refreshed sections and retain task-specific actions. */
+(function(){
+ let busy=false;
+ function reconcile(){
+  if(busy||typeof page==='undefined'||page!=='tasks')return;
+  busy=true;
+  try{
+   if(typeof bcExpandTaskTables==='function')bcExpandTaskTables();
+   document.querySelectorAll('section.bc-core-all-tasks .bc-task-expand-item, .bc-core-job-tasks .bc-task-expand-item').forEach(card=>{
+    const open=card.querySelector('.bc-task-expand-actions button[onclick*="bcDetailOpen"]');
+    if(!open||card.querySelector('button[data-bc-task-notes]'))return;
+    const match=open.getAttribute('onclick')?.match(/bcDetailOpen\(("[^"]+"|'[^']+')\)/);
+    if(!match)return;
+    let jobId;try{jobId=JSON.parse(match[1].replace(/^'/,'"').replace(/'$/,'"'));}catch{return;}
+    const title=card.querySelector('.bc-task-expand-heading strong')?.textContent.trim();
+    const task=(typeof bcCoreJobTasks!=='undefined'?bcCoreJobTasks:[]).find(t=>String(t.job_id)===String(jobId)&&t.title===title);
+    if(!task)return;
+    const button=document.createElement('button');button.type='button';button.className='btn secondary';button.dataset.bcTaskNotes=task.id;button.textContent='Task Notes';
+    button.onclick=()=>bcTaskNotesOpen(task.id);open.before(button);
+   });
+  }finally{busy=false;}
+ }
+ const root=document.getElementById('view');
+ if(root)new MutationObserver(()=>{if(!busy)queueMicrotask(reconcile)}).observe(root,{childList:true,subtree:true});
+ document.addEventListener('click',e=>{if(e.target.closest('[data-page="tasks"], [onclick*="tasks"]'))queueMicrotask(reconcile)});
+ queueMicrotask(reconcile);
+})();
+</script>
 </body></html>
