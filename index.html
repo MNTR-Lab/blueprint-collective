@@ -90,6 +90,24 @@
 .bc-followup-fields small{color:#64748b}
 .bc-followup-item-body>.btn{justify-self:start}
 </style>
+
+<style>
+.bc-task-expand-list{display:grid;gap:9px;padding:12px 16px 17px}
+.bc-task-expand-item{border:1px solid #dbe3ed;border-radius:10px;background:#fff;overflow:hidden}
+.bc-task-expand-item>summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:14px 15px}
+.bc-task-expand-item>summary::-webkit-details-marker{display:none}
+.bc-task-expand-heading{flex:1;min-width:0;display:grid;gap:4px}
+.bc-task-expand-heading strong{font-size:14px;overflow-wrap:anywhere}
+.bc-task-expand-heading small{color:#64748b}
+.bc-task-expand-status{font-size:12px;font-weight:700;background:#e8eef6;color:#29445f;padding:5px 9px;border-radius:14px;white-space:nowrap}
+.bc-task-expand-arrow{font-size:20px;color:#52657b}
+.bc-task-expand-item[open] .bc-task-expand-arrow{transform:rotate(180deg)}
+.bc-task-expand-body{border-top:1px solid #e6ebf2;padding:15px;display:grid;gap:14px}
+.bc-task-expand-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}
+.bc-task-expand-field{display:grid;gap:5px;min-width:0}
+.bc-task-expand-field>small{color:#64748b}
+.bc-task-expand-actions{display:flex;gap:8px;flex-wrap:wrap}
+</style>
 </head><body><div class="shell"><aside class="side"><div class="brand brand-logo"><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback" style="display:none">BLUEPRINT <small>COLLECTIVE</small></span></div><nav id="nav"></nav><div class="provider-footer"><span class="provider-label">PLATFORM POWERED BY</span><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="provider-fallback" style="display:none">Blueprint Collective</span></div></aside><div class="main"><header class="top"><h1 id="topTitle">Dashboard</h1><div style="display:flex;align-items:center;gap:12px"><select id="businessSelect" class="field" aria-label="Business selector"></select><span class="pill">Demo workspace</span></div></header><main class="content" id="view"></main></div></div><div class="modalbg" id="modalbg"><div class="modal" id="modal"></div></div><script>
 const K='blueprint-crm-v1-local';const sample={businesses:[{id:'blueprint',name:'Blueprint Collective',color:'#163b65'}],records:{leads:[{id:'l1',businessId:'blueprint',name:'Morgan Parker',company:'Summit Athletics',email:'morgan@example.com',status:'Qualified',value:5200,owner:'Admin'},{id:'l2',businessId:'blueprint',name:'Taylor Reed',company:'Northstar Media',email:'taylor@example.com',status:'New',value:1800,owner:'Admin'},{id:'l3',businessId:'blueprint',name:'Jordan Lee',company:'Peak Events',email:'jordan@example.com',status:'Contacted',value:3600,owner:'Admin'}],clients:[{id:'c1',businessId:'blueprint',name:'Evergreen Sports',email:'hello@example.com',status:'Active',owner:'Admin'},{id:'c2',businessId:'blueprint',name:'Harbor Creative',email:'contact@example.com',status:'Prospect',owner:'Admin'}],contacts:[{id:'ct1',businessId:'blueprint',name:'Alex Morgan',company:'Evergreen Sports',email:'alex@example.com',status:'Primary'}],deals:[{id:'d1',businessId:'blueprint',name:'Spring Campaign',company:'Evergreen Sports',value:12000,status:'Proposal Sent',owner:'Admin'},{id:'d2',businessId:'blueprint',name:'Brand Refresh',company:'Harbor Creative',value:7500,status:'Discovery',owner:'Admin'}],jobs:[{id:'j1',businessId:'blueprint',name:'Website Refresh',company:'Evergreen Sports',status:'In Progress',owner:'Admin'}],tasks:[{id:'t1',businessId:'blueprint',name:'Follow up on proposal',company:'Evergreen Sports',status:'Open',owner:'Admin'}]},connections:[]};
 let data;try{data=JSON.parse(localStorage.getItem(K))||structuredClone(sample)}catch{data=structuredClone(sample)};let page='dashboard',business='blueprint',search='',clientTab='active',settingsTab='businesses';const navs=[['dashboard','▦','Dashboard'],['team-directory','♙','Team Directory'],['email','✉','Email Inbox'],['client-management','▣','Clients'],['leads','◎','Leads'],['deals','◇','Opportunities'],['jobs','▤','Jobs & Projects'],['tasks','☷','Tasks & Activities'],['revenue','▥','Revenue Goals'],['settings','⚙','Settings'],['logout','⇥','Log Out']];const schemas={leads:{title:'Leads',fields:['name','company','email','status','value','owner'],statuses:['New','Contacted','Qualified','Unqualified','Converted']},clients:{title:'Companies & Clients',fields:['name','email','status','owner'],statuses:['Prospect','Active','Inactive','Archived']},contacts:{title:'Contacts',fields:['name','company','email','status'],statuses:['Primary','Secondary','Other']},deals:{title:'Opportunities',fields:['name','company','value','status','owner'],statuses:['Discovery','Quoting','Proposal Sent','Negotiation','Won','Lost']},jobs:{title:'Jobs & Projects',fields:['name','company','status','owner'],statuses:['Not Started','In Progress','On Hold','Completed']},tasks:{title:'Activities & Tasks',fields:['name','company','status','owner'],statuses:['Open','In Progress','Completed']}};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const save=()=>localStorage.setItem(K,JSON.stringify(data));const records=k=>data.records[k].filter(x=>x.businessId===business);const fmt=n=>'$'+Number(n||0).toLocaleString();const badge=s=>{let c=/active|won|qualified|completed/i.test(s)?'green':/new|progress|proposal|contacted/i.test(s)?'orange':/lost|unqualified/i.test(s)?'red':'gray';return `<span class="status ${c}">${esc(s)}</span>`};function render(){document.getElementById('nav').innerHTML=navs.map(([id,icon,label])=>`<button class="nav ${page===id?'active':''}" onclick="${id==='logout'?'bcLogout()':`navigate('${id}')`}"><span>${icon}</span>${label}${id==='email'&&bcMailHasNew?'<span class="bc-new-mail-dot" title="New email received" aria-label="New email received"></span>':''}${id==='jobs'&&bcJobsHasNew?'<span class="bc-new-mail-dot" title="New job or client approval activity" aria-label="New job activity"></span>':''}${id==='tasks'&&bcTasksHasNew?'<span class="bc-new-mail-dot" title="New task added" aria-label="New task"></span>':''}</button>`).join('');document.getElementById('topTitle').textContent=navs.find(n=>n[0]===page)[2];document.getElementById('businessSelect').innerHTML=data.businesses.map(b=>`<option value="${esc(b.id)}" ${business===b.id?'selected':''}>${esc(b.name)}</option>`).join('');document.getElementById('businessSelect').onchange=e=>{business=e.target.value;search='';render()};document.getElementById('view').innerHTML=page==='dashboard'?dashboard():page==='team-directory'?'<div class="heading"><div><h2>Team Directory</h2><p>Manage your team members and invitations.</p></div></div><section class="panel"><p>Select Team Directory to manage employees.</p></section>':page==='revenue'?bcRevenuePage():page==='client-management'?clientManagement():schemas[page]?listPage(page):page==='connections'?connections():page==='contacts'?listPage('contacts'):page==='clients'?clientManagement():settings();}function navigate(p){page=p;search='';if(p==='email')bcMailMarkSeen();if(p==='tasks')bcTasksMarkSeen();render();if(p==='team-directory')bcOpenTeamDirectory()}
@@ -2894,5 +2912,58 @@ bcTasksPoll=function(){
  bcTasksHasNew=bcHasActionableTasks();
  bcOriginalSidebarDot('tasks',bcTasksHasNew);
 };
+</script>
+
+<script>
+/* Present existing project and production task rows as expandable records.
+   Move live controls rather than cloning markup so handlers remain unchanged. */
+function bcExpandTaskTables(){
+ if(page!=='tasks')return;
+ document.querySelectorAll('section.bc-task-panel').forEach(panel=>{
+  const heading=panel.querySelector('.bc-task-toolbar h3');
+  if(!heading||!['Project tasks','Production assignments'].includes(heading.textContent.trim()))return;
+  const table=panel.querySelector('.bc-task-tablewrap table');
+  if(!table)return;
+  const rows=[...table.querySelectorAll('tbody tr')];
+  const list=document.createElement('div');list.className='bc-task-expand-list';
+  rows.forEach((tr,index)=>{
+   const cells=[...tr.children];
+   if(cells.length<5||tr.querySelector('.bc-task-empty')){
+    const empty=document.createElement('p');empty.className='muted';empty.textContent=tr.textContent.trim();list.appendChild(empty);return;
+   }
+   const production=heading.textContent.trim()==='Production assignments';
+   const item=document.createElement('details');item.className='bc-task-expand-item';
+   const summary=document.createElement('summary');
+   const title=document.createElement('span');title.className='bc-task-expand-heading';
+   const originalTitle=cells[0].querySelector('strong');
+   const originalSub=cells[0].querySelector('small');
+   if(originalTitle)title.appendChild(originalTitle);
+   if(originalSub)title.appendChild(originalSub);
+   const state=document.createElement('span');state.className='bc-task-expand-status';
+   const statusCell=cells[production?3:4];
+   state.textContent=statusCell?.querySelector('select')?.value||statusCell?.textContent.trim()||'';
+   const arrow=document.createElement('span');arrow.className='bc-task-expand-arrow';arrow.textContent='⌄';
+   summary.append(title,state,arrow);item.appendChild(summary);
+   const body=document.createElement('div');body.className='bc-task-expand-body';
+   const fields=document.createElement('div');fields.className='bc-task-expand-fields';
+   const entries=production?[['Assigned To',1],['Due Date',2],['Status',3]]:[['Assigned To',1],['Due Date',2],['Priority',3],['Status',4]];
+   entries.forEach(([label,cellIndex])=>{
+    const field=document.createElement('div');field.className='bc-task-expand-field';
+    const cap=document.createElement('small');cap.textContent=label;
+    const val=document.createElement('div');
+    while(cells[cellIndex]?.firstChild)val.appendChild(cells[cellIndex].firstChild);
+    field.append(cap,val);fields.appendChild(field);
+   });
+   body.appendChild(fields);
+   const actions=document.createElement('div');actions.className='bc-task-expand-actions';
+   const actionCell=cells[production?4:5];
+   while(actionCell?.firstChild)actions.appendChild(actionCell.firstChild);
+   body.appendChild(actions);item.appendChild(body);list.appendChild(item);
+  });
+  table.closest('.bc-task-tablewrap').replaceWith(list);
+ });
+}
+const bcTaskDropdownRender=render;
+render=function(){bcTaskDropdownRender();bcExpandTaskTables();};
 </script>
 </body></html>
