@@ -2154,4 +2154,31 @@ function bcStaffDirectory(){
  '<div class="tablewrap"><table class="bc-directory-table"><thead><tr><th>Employee</th><th>Role</th><th>Status</th><th>Access</th><th>Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5" class="empty">No employees match your search.</td></tr>')+'</tbody></table></div></section>';
 }
 </script>
+
+<style>
+.bc-mail-layout{display:grid;grid-template-columns:minmax(230px,38%) minmax(0,62%);border:1px solid #dce5ef;border-radius:12px;overflow:hidden;min-height:450px}
+.bc-mail-list{border-right:1px solid #dce5ef;max-height:65vh;overflow:auto}
+.bc-mail-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e6edf5;background:white;padding:15px;cursor:pointer}
+.bc-mail-item.selected{background:#e9f2fc}
+.bc-mail-item small{display:block;color:#64748b;margin-top:6px;overflow-wrap:anywhere}
+.bc-mail-reader{padding:20px;min-width:0;overflow-wrap:anywhere}
+.bc-mail-bar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:15px 0}
+.bc-mail-bar input{flex:1;min-width:190px;padding:11px;border:1px solid #d5deeb;border-radius:8px}
+@media(max-width:780px){.bc-mail-layout{grid-template-columns:1fr}.bc-mail-list{max-height:280px;border-right:0;border-bottom:1px solid #dce5ef}}
+</style>
+<script>
+let bcMailSearch='';
+function bcMailFilter(v){bcMailSearch=v;render();const x=document.getElementById('bcMailSearch');if(x){x.focus();x.setSelectionRange(v.length,v.length)}}
+bcInboxLayout=function(){
+ const top='<div class="heading"><div><h2>Email & Communications</h2><p>Shared inbox · clients@blueprintcollective.app</p></div><button class="btn" onclick="bcOpenCompose()">+ Compose Email</button></div>';
+ const tabs='<div class="bc-mail-bar"><button class="btn '+(bcMailTab==='inbox'?'':'secondary')+'" onclick="bcMailSwitch(\'inbox\')">Inbox</button><button class="btn '+(bcMailTab==='sent'?'':'secondary')+'" onclick="bcMailSwitch(\'sent\')">Sent</button><button class="btn '+(bcMailTab==='compose'?'':'secondary')+'" onclick="bcOpenCompose()">Compose</button><button class="btn secondary" onclick="bcMailTab===\'sent\'?bcLoadSent():bcLoadInbox()">Refresh</button></div>';
+ const notice=(bcInboxError?'<div class="alert">'+bcInboxEscape(bcInboxError)+'</div>':'')+(bcSendFeedback?'<p class="notice">'+bcInboxEscape(bcSendFeedback)+'</p>':'');
+ if(bcMailTab==='sent')return top+'<section class="panel">'+tabs+notice+bcOutgoingSentLayout()+'</section>';
+ if(bcMailTab==='compose')return top+'<section class="panel">'+tabs+notice+bcOutgoingComposeLayout()+'</section>';
+ const messages=bcInboxVisibleMessages().filter(m=>[m.sender,m.subject,bcEmailClientMatch(m)?.name].some(x=>String(x||'').toLowerCase().includes(bcMailSearch.toLowerCase())));
+ const rows=messages.map(m=>'<button class="bc-mail-item '+(bcInboxSelected===m.id?'selected':'')+'" onclick="bcOpenInboxMessage(\''+bcInboxEscape(m.id)+'\')"><strong>'+bcInboxEscape(m.subject||'(No subject)')+'</strong><small>'+bcInboxEscape(m.sender)+'</small><small>'+bcInboxEscape(bcEmailClientMatch(m)?.name||'Unmatched client')+' · '+bcInboxEscape(new Date(m.received_at).toLocaleString())+'</small></button>').join('');
+ const selected=bcInboxMessages.find(m=>m.id===bcInboxSelected);
+ return top+'<section class="panel">'+tabs+notice+bcInboxFilterNotice()+'<div class="bc-mail-bar"><input id="bcMailSearch" placeholder="Search sender, subject, client…" value="'+bcInboxEscape(bcMailSearch)+'" oninput="bcMailFilter(this.value)"><span class="muted">'+messages.length+' messages</span></div>'+(bcInboxBusy?'<p>Loading messages…</p>':'')+'<div class="bc-mail-layout"><div class="bc-mail-list">'+(rows||'<p style="padding:16px">No matching messages.</p>')+'</div><div class="bc-mail-reader">'+(selected?bcInboxDetail(selected):'<p class="muted">Select a message to read or reply.</p>')+'</div></div></section>';
+};
+</script>
 </body></html>
