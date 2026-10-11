@@ -1314,8 +1314,8 @@ bcJobsPage=function(){
  '<div style="display:grid;gap:16px">'+
  '<div><h3>Job Notes</h3><form onsubmit="bcDetailAddNote(event)"><textarea name="body" rows="3" maxlength="10000" required placeholder="Add an internal job note" style="width:100%;padding:10px"></textarea><button class="btn" type="submit">Save Note</button></form>'+
  (bcDetailData.notes.length?bcDetailData.notes.map(n=>'<div style="padding:12px;border-bottom:1px solid #ddd"><small>'+h(new Date(n.created_at).toLocaleString())+'</small><p style="white-space:pre-wrap">'+h(n.body)+'</p></div>').join(''):'<p class="muted">No notes yet.</p>')+'</div>'+
- '<div class="bc-documents"><div class="bc-doc-heading"><div><h3>Job Documents</h3><p class="muted">Keep quotes, proofs, invoices, and approvals organized with this job.</p></div><span class="bc-doc-count">'+bcDetailData.documents.length+' file(s)</span></div><form class="bc-upload-form" onsubmit="bcDetailUpload(event)"><div class="bc-upload-top"><label for="bcDocumentCategory">Document Type</label><select id="bcDocumentCategory" name="category"><option>Quote</option><option>Proof</option><option>Invoice</option><option>Approval</option><option>Other</option></select></div><div class="bc-upload-drop" id="bcUploadDrop" ondragover="bcDetailDragOver(event)" ondragleave="bcDetailDragLeave(event)" ondrop="bcDetailDrop(event)"><input type="file" name="file" id="bcUploadFile" required onchange="bcDetailFileChanged(this)"><label for="bcUploadFile" class="bc-upload-pick"><span class="bc-upload-icon">↑</span><strong>Choose a file or drag it here</strong><span>PDFs, images and other documents · Up to 15 MB</span><span class="bc-upload-browse">Browse files</span></label></div><div id="bcUploadSelected" class="bc-upload-selected" aria-live="polite">No file selected</div><div class="bc-upload-actions"><span id="bcUploadProgress" class="muted" role="status">Files are stored securely with this job.</span><button class="btn" type="submit">Upload Document</button></div></form>'+
- (bcDetailData.documents.length?'<div class="tablewrap"><table><thead><tr><th>Document</th><th>Category</th><th>Added</th><th></th></tr></thead><tbody>'+bcDetailData.documents.map(d=>'<tr><td>'+h(d.filename)+'</td><td>'+h(d.category)+'</td><td>'+h(new Date(d.created_at).toLocaleDateString())+'</td><td><button class="btn secondary" onclick="bcDetailDownload(\''+h(d.id)+'\')">Download</button> <button class="btn secondary" onclick="bcDetailView(\''+h(d.id)+'\')">View</button></td></tr>').join('')+'</tbody></table></div>':'<p class="muted">No documents yet.</p>')+'</div>'+
+ '<details class="bc-collapse-section"><summary><span>Job Documents</span><span class="bc-collapse-meta">'+bcDetailData.documents.length+' file(s)</span></summary><div class="bc-collapse-content"><div class="bc-documents"><p class="muted">Keep quotes, proofs, invoices, and approvals organized with this job.</p><form class="bc-upload-form" onsubmit="bcDetailUpload(event)"><div class="bc-upload-top"><label for="bcDocumentCategory">Document Type</label><select id="bcDocumentCategory" name="category"><option>Quote</option><option>Proof</option><option>Invoice</option><option>Approval</option><option>Other</option></select></div><div class="bc-upload-drop" id="bcUploadDrop" ondragover="bcDetailDragOver(event)" ondragleave="bcDetailDragLeave(event)" ondrop="bcDetailDrop(event)"><input type="file" name="file" id="bcUploadFile" required onchange="bcDetailFileChanged(this)"><label for="bcUploadFile" class="bc-upload-pick"><span class="bc-upload-icon">↑</span><strong>Choose a file or drag it here</strong><span>PDFs, images and other documents · Up to 15 MB</span><span class="bc-upload-browse">Browse files</span></label></div><div id="bcUploadSelected" class="bc-upload-selected" aria-live="polite">No file selected</div><div class="bc-upload-actions"><span id="bcUploadProgress" class="muted" role="status">Files are stored securely with this job.</span><button class="btn" type="submit">Upload Document</button></div></form>'+
+ (bcDetailData.documents.length?'<div class="tablewrap"><table><thead><tr><th>Document</th><th>Category</th><th>Added</th><th></th></tr></thead><tbody>'+bcDetailData.documents.map(d=>'<tr><td>'+h(d.filename)+'</td><td>'+h(d.category)+'</td><td>'+h(new Date(d.created_at).toLocaleDateString())+'</td><td><button class="btn secondary" onclick="bcDetailDownload(\''+h(d.id)+'\')">Download</button> <button class="btn secondary" onclick="bcDetailView(\''+h(d.id)+'\')">View</button></td></tr>').join('')+'</tbody></table></div>' :'<p class="muted">No documents yet.</p>')+'</div></div></details>'+
  '<p class="muted">Job correspondence and approval workflows will be connected in the next phase.</p></div>';
  return base+'<section class="panel" style="margin-top:20px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><h2>Job Details</h2><p>'+h(j.job_number)+' · '+h(j.title)+' · '+h(j.client_name)+'</p></div><button class="btn secondary" onclick="bcDetailClose()">Close Details</button></div>'+details+'</section>';
 };
@@ -1536,9 +1536,9 @@ bcJobsPage=function(){
  const currentJob=bcDetailData.job||{};
  const statusOptions=bcCoreJobStatuses.map(st=>'<option value="'+h(st)+'" '+(currentJob.status===st?'selected':'')+'>'+h(st)+'</option>').join('');
  const productionControls='<section class="bc-workflow-box" style="margin-bottom:14px"><div class="bc-workflow-title"><h3>Production Status</h3></div><p class="muted">Approval workflow updates the job status automatically when the CRM synchronizes. You may also change the status manually.</p><form onsubmit="bcJobUpdateProductionStatus(event)" style="display:flex;align-items:end;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:180px">Job Status<select name="status" style="width:100%;padding:10px">'+statusOptions+'</select></label><button type="submit" class="btn">Save Status</button></form></section>';
- const approvalHtml=productionControls+approvalNotice+'<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ const approvalHtml=productionControls+approvalNotice+'<details class="bc-collapse-section"><summary><span>Document Approvals</span><span class="bc-collapse-meta">'+approvals.length+' request(s)</span></summary><div class="bc-collapse-content"><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
- revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
+ revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</div></details>';
  let emailsHtml='';
  if(bcJobEmailBusy)emailsHtml='<p>Loading correspondence…</p>';
  else if(!bcJobEmailData){
@@ -1557,7 +1557,7 @@ bcJobsPage=function(){
   const options=unlinked.map(e=>'<option value="'+h(e.direction+':'+e.id)+'">'+h((e.direction==='incoming'?'IN':'OUT')+' · '+(e.subject||'(No subject)')+' · '+(e.sender||''))+'</option>').join('');
   emailsHtml='<div class="bc-workflow-form"><label>Find existing CRM correspondence<select id="bcJobEmailChoice">'+(options||'<option value="">No unlinked emails available</option>')+'</select></label><button class="btn" type="button" onclick="bcJobAttachSelectedEmail()" '+(!options?'disabled':'')+'>Link to Job</button><button class="btn secondary" type="button" onclick="bcJobLoadEmails()">Refresh</button></div>'+(linkedRows||'<p class="muted">No emails linked to this job yet.</p>')+'<p class="muted">Shows the latest 100 incoming and 100 outgoing emails. Emails already linked to other jobs are excluded.</p>';
  }
- const emailHtml='<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Job Correspondence</h3><span class="bc-workflow-pill">CRM email</span></div><p class="muted">Link existing client emails to this job. Original messages remain in the CRM inbox and sent mail.</p>'+emailsHtml+'</section>';
+ const emailHtml='<details class="bc-collapse-section"><summary><span>Email Correspondence</span><span class="bc-collapse-meta">'+(bcDetailData.linkedEmails||[]).length+' linked</span></summary><div class="bc-collapse-content"><p class="muted">Link existing client emails to this job. Original messages remain in the CRM inbox and sent mail.</p>'+emailsHtml+'</div></details>';
  const insertAt=html.lastIndexOf('</section>');
  return insertAt>=0?html.slice(0,insertAt)+approvalHtml+emailHtml+html.slice(insertAt):html+approvalHtml+emailHtml;
 };
@@ -1699,4 +1699,34 @@ async function bcJobEmailLink(emailId,direction,attach){
 .bc-mail-view-content h3{margin:0 0 18px;overflow-wrap:anywhere}
 .bc-mail-meta{padding:14px 16px;background:#f4f7fb;border-radius:10px;display:grid;gap:7px;font-size:13px;overflow-wrap:anywhere}
 .bc-mail-body{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:inherit;line-height:1.6;margin:20px 0 0}
-</style></body></html>
+</style>
+<style>
+.bc-collapse-section{margin:14px 0;border:1px solid #dce4ee;border-radius:12px;background:#fff;overflow:hidden}
+.bc-collapse-section>summary{display:flex;align-items:center;gap:12px;cursor:pointer;padding:16px 18px;font-weight:700;color:#173253;list-style:none;user-select:none}
+.bc-collapse-section>summary::-webkit-details-marker{display:none}
+.bc-collapse-section>summary:before{content:'▸';font-size:17px;color:#64748b;transition:transform .15s}
+.bc-collapse-section[open]>summary:before{transform:rotate(90deg)}
+.bc-collapse-section>summary:hover{background:#f5f8fc}
+.bc-collapse-meta{margin-left:auto;font-size:12px;font-weight:600;color:#64748b}
+.bc-collapse-content{padding:4px 18px 18px;border-top:1px solid #edf1f5}
+</style>
+<script>
+/* Keep dropdowns open while a job refreshes after an action. */
+document.addEventListener('toggle',function(e){
+ const el=e.target;
+ if(!el.matches?.('.bc-collapse-section'))return;
+ const title=el.querySelector('summary span')?.textContent||'';
+ if(!title||!window.bcDetailJobId)return;
+ try{sessionStorage.setItem('bc-collapse:'+bcDetailJobId+':'+title,el.open?'open':'closed')}catch(_){}
+},true);
+const bcCollapseRenderBase=render;
+render=function(){
+ bcCollapseRenderBase();
+ if(page!=='jobs'||!bcDetailJobId)return;
+ document.querySelectorAll('.bc-collapse-section').forEach(el=>{
+  const title=el.querySelector('summary span')?.textContent||'';
+  try{el.open=sessionStorage.getItem('bc-collapse:'+bcDetailJobId+':'+title)==='open'}catch(_){}
+ });
+};
+</script>
+</body></html>
