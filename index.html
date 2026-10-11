@@ -2234,4 +2234,30 @@ bcInboxDetail=function(m){
  return html+(notice?'<p class="muted" style="margin-top:10px">'+notice+'</p>':'');
 };
 </script>
+
+<script>
+/* Linked correspondence panel on the existing Job Details page. */
+let bcJobMailBusy=false,bcJobMailError='';
+async function bcJobMailRefresh(){
+ bcJobMailBusy=true;bcJobMailError='';
+ try{
+  const [links,inbox]=await Promise.all([bcMailJobRequest('jobLinks'),bcMailJobRequest('list') .catch(()=>null)]);
+  bcMailJobLinks=links.links||[];
+  if(inbox?.messages)bcInboxMessages=inbox.messages;
+ }catch(e){bcJobMailError=e.message||String(e)}
+ finally{bcJobMailBusy=false;if(page==='jobs')render()}
+}
+const bcJobMailPriorOpen=bcDetailOpen;
+bcDetailOpen=async function(id){await bcJobMailPriorOpen(id);await bcJobMailRefresh()};
+const bcJobMailPriorPage=bcJobsPage;
+bcJobsPage=function(){
+ const html=bcJobMailPriorPage();
+ if(!bcDetailJobId)return html;
+ const matches=bcMailJobLinks.filter(l=>String(l.job_id)===String(bcDetailJobId));
+ const messages=matches.map(l=>bcInboxMessages.find(m=>String(m.id)===String(l.email_id))).filter(Boolean);
+ const rows=messages.map(m=>'<div style="padding:12px 0;border-bottom:1px solid #e5ebf1"><strong>'+bcInboxEscape(m.subject||'(No subject)')+'</strong><div class="muted">'+bcInboxEscape(m.sender)+' · '+bcInboxEscape(new Date(m.received_at).toLocaleString())+'</div><details><summary style="cursor:pointer;margin-top:6px">Read message</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+bcInboxEscape(bcEmailBody(m))+'</p></details><button class="btn secondary" style="margin-top:8px" onclick="bcMailTab=\'inbox\';bcInboxSelected=\''+bcInboxEscape(m.id)+'\';navigate(\'email\')">Open in Email Center</button></div>').join('');
+ const panel='<section class="panel" style="margin-top:16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h3>Linked Email Correspondence</h3><button class="btn secondary" onclick="bcJobMailRefresh()">Refresh</button></div>'+(bcJobMailBusy?'<p class="muted">Loading correspondence…</p>':'')+(bcJobMailError?'<p class="notice">'+bcInboxEscape(bcJobMailError)+'</p>':'')+(rows||'<p class="muted">No linked incoming emails for this job.</p>')+'</section>';
+ return html+panel;
+};
+</script>
 </body></html>
