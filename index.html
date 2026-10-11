@@ -1759,12 +1759,12 @@ render=function(){
    by organization, pending the production database/API integration. */
 (function(){
 const defaults=['Artwork & Design','Materials & Ordering','Production','Quality Control','Delivery & Fulfillment'];
-let selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdLoading=false,bcProdError='';
+let selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdLoading=false,bcProdError='';
 const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||'default');
 const stages=()=>bcProdStages.map(x=>x.name);
 const progress=()=>{
  const byJob={};
- for(const r of bcProdEntries){const i=bcProdStages.findIndex(s=>s.id===r.stage_id);if(i<0)continue;(byJob[r.job_id]??={})[i]={status:r.status,assignee:r.assigned_to||'',target:r.target_date||'',completed:r.completed_date||'',notes:r.notes||''};}
+ for(const r of bcProdEntries){const i=bcProdStages.findIndex(s=>s.id===r.stage_id);if(i<0)continue;(byJob[r.job_id]??={})[i]={status:r.status,assignee:r.assigned_to||'',employeeId:r.employee_id||'',target:r.target_date||'',completed:r.completed_date||'',notes:r.notes||''};}
  return byJob;
 };
 async function bcProdLoad(){
@@ -1773,7 +1773,7 @@ async function bcProdLoad(){
  try{
   let data=await bcJobsRequest({action:'productionLoad'});
   if(!data.stages?.length){await bcJobsRequest({action:'productionSeed'});data=await bcJobsRequest({action:'productionLoad'});}
-  bcProdStages=data.stages||[];bcProdEntries=data.entries||[];
+  bcProdStages=data.stages||[];bcProdEntries=data.entries||[];bcProdEmployees=data.employees||[];
  }catch(err){bcProdError=String(err?.message||err);}
  finally{bcProdLoading=false;if(page==='production'||page==='production-settings')render();}
 }
@@ -1809,7 +1809,7 @@ function productionPage(){
  '<div><b>'+percent+'% production progress</b><div class="bc-prod-progress"><div style="width:'+percent+'%"></div></div><small class="muted">'+earnedMilestones+' of '+totalMilestones+' milestones reached · '+completed+' stages complete</small></div>'+
  '<div class="bc-prod-stages">'+names.map((name,i)=>{const r=rec[i]||{};return '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>'+(i+1)+'. '+e(name)+'</b><span class="muted">'+e(r.status||'Not Started')+'</span></div>'+
  '<label>Stage status</label><select onchange="bcProdField('+i+',\'status\',this.value)">'+statusNames.map(st=>'<option '+((r.status||'Not Started')===st?'selected':'')+'>'+st+'</option>').join('')+'</select>'+
- '<label>Assigned to</label><input placeholder="Employee name" value="'+e(r.assignee||'')+'" onchange="bcProdField('+i+',\'assignee\',this.value)">'+
+ '<label>Assigned to</label><select onchange="bcProdField('+i+',\'employeeId\',this.value)"><option value="">Unassigned</option>'+bcProdEmployees.filter(x=>x.active||x.id===r.employeeId).map(x=>'<option value="'+e(x.id)+'" '+(r.employeeId===x.id?'selected':'')+'>'+e(x.full_name)+(x.active?'':' (Inactive)')+'</option>').join('')+'</select>'+(!r.employeeId&&r.assignee?'<small class="muted">Previous assignment: '+e(r.assignee)+'</small>':'')+
  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div><label>Target date</label><input type="date" value="'+e(r.target||'')+'" onchange="bcProdField('+i+',\'target\',this.value)"></div><div><label>Completed date</label><input type="date" value="'+e(r.completed||'')+'" onchange="bcProdField('+i+',\'completed\',this.value)"></div></div>'+
  '<label>Production notes</label><textarea rows="2" placeholder="Notes for this stage" onchange="bcProdField('+i+',\'notes\',this.value)">'+e(r.notes||'')+'</textarea></div>'}).join('')+'</div>':
  '<h3>Select a job</h3><p class="muted">Jobs appear here after their approval status reaches Ready for Production.</p>')+
@@ -1820,14 +1820,27 @@ function settingsPage(){
  return '<div class="bc-prod-head"><div><h2>Production Workflow Settings</h2><p class="muted">Configure the default stages for this organization.</p></div><button class="btn secondary" onclick="bcProdBack()">Back to Production</button></div>'+
  '<section class="bc-prod-panel"><h3>Organization Production Stages</h3><div class="bc-prod-note">Stages are stored in Supabase for this organization. Stages with existing production history cannot be deleted.</div>'+
  '<div class="bc-prod-settings">'+names.map((name,i)=>'<div class="bc-prod-setting"><span style="min-width:24px">'+(i+1)+'.</span><input aria-label="Stage name" value="'+e(name)+'" onchange="bcProdRename('+i+',this.value)"><button class="btn secondary" onclick="bcProdMove('+i+',-1)" '+(i===0?'disabled':'')+' title="Move up">↑</button><button class="btn secondary" onclick="bcProdMove('+i+',1)" '+(i===names.length-1?'disabled':'')+' title="Move down">↓</button><button class="btn secondary" onclick="bcProdRemove('+i+')" title="Remove stage">×</button></div>').join('')+'</div>'+
- '<div style="margin-top:18px"><button class="btn" onclick="bcProdAdd()">+ Add Stage</button></div></section>';
+ '<div style="margin-top:18px"><button class="btn" onclick="bcProdAdd()">+ Add Stage</button></div></section>'+
+ '<section class="bc-prod-panel" style="margin-top:18px"><h3>Production Team</h3><p class="muted">Add employees to assign production stages. Inactive employees remain in historical records.</p>'+
+ '<button class="btn" onclick="bcProdAddEmployee()">+ Add Employee</button>'+
+ '<div class="bc-prod-settings" style="margin-top:14px">'+(bcProdEmployees.length?bcProdEmployees.map(x=>'<div class="bc-prod-setting"><span style="flex:1">'+e(x.full_name)+(x.email?' <small class="muted">('+e(x.email)+')</small>':'')+'</span><button class="btn secondary" onclick="bcProdToggleEmployee(\''+e(x.id)+'\','+(!x.active)+')">'+(x.active?'Deactivate':'Reactivate')+'</button></div>').join(''):'<p class="muted">No employees added yet.</p>')+'</div></section>';
 }
+window.bcProdAddEmployee=async()=>{
+ const name=prompt('Employee full name');if(!name?.trim())return;
+ const email=prompt('Employee email (optional)')||'';
+ try{await bcJobsRequest({action:'productionAddEmployee',name:name.trim(),email:email.trim()});await bcProdLoad()}
+ catch(err){alert('Could not add employee: '+String(err.message||err))}
+};
+window.bcProdToggleEmployee=async(id,active)=>{
+ try{await bcJobsRequest({action:'productionSetEmployeeActive',employeeId:id,active});await bcProdLoad()}
+ catch(err){alert('Could not update employee: '+String(err.message||err))}
+};
 window.bcProdSelect=id=>{selectedJob=String(id);render()};
 window.bcProdField=async(index,field,value)=>{
  if(!selectedJob||!bcProdStages[index])return;
  const r=(progress()[selectedJob]||{})[index]||{};
  const next={...r,[field]:value};
- try{await bcJobsRequest({action:'productionSaveEntry',id:selectedJob,stageId:bcProdStages[index].id,status:next.status||'Not Started',assignedTo:next.assignee||'',targetDate:next.target||null,completedDate:next.completed||null,notes:next.notes||''});await bcCoreLoadJobs();await bcProdLoad();}
+ try{await bcJobsRequest({action:'productionSaveEntry',id:selectedJob,stageId:bcProdStages[index].id,status:next.status||'Not Started',assignedTo:next.employeeId?'':(next.assignee||''),employeeId:next.employeeId||'',targetDate:next.target||null,completedDate:next.completed||null,notes:next.notes||''});await bcCoreLoadJobs();await bcProdLoad();}
  catch(err){alert('Unable to save production stage: '+String(err.message||err));}
 };
 window.bcProdRefresh=async()=>{await bcCoreLoadJobs();await bcProdLoad()};
