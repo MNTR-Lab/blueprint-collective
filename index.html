@@ -991,7 +991,9 @@ function bcSidebarDot(id,on){
  button.querySelector('.bc-new-mail-dot')?.remove();
  if(on){const dot=document.createElement('span');dot.className='bc-new-mail-dot';dot.title=id==='jobs'?'New job or client approval activity':'New task added';dot.setAttribute('aria-label',dot.title);button.appendChild(dot)}
 }
-function bcJobsMarkSeen(){ /* Job action dots persist until revision approval is emailed. */ }
+function bcJobsMarkSeen(){
+ if(bcDetailJobId)bcMarkJobApprovalSeen(bcDetailJobId);
+}
 let bcApprovedEvents=[],bcUnreadApprovedJobIds=[];
 function bcApprovalSeenKey(jobId){return bcNoticeKey('approval-reviewed-'+jobId)}
 function bcMarkJobApprovalSeen(jobId){
@@ -1032,7 +1034,12 @@ async function bcJobsPoll(){
  bcJobActivityBusy=true;
  try{
   const x=await bcJobsRequest({action:'notificationStatus'});
-  bcUnresolvedJobIds=(x.unresolvedJobs||[]).map(String);
+  // Suppress obsolete change-request alerts for jobs whose final approval
+  // has already moved them to Ready for Production (or beyond).
+  const completed=new Set(bcCoreJobs.filter(j=>
+   ['Ready for Production','In Production','Completed','Closed'].includes(j.status)
+  ).map(j=>String(j.id)));
+  bcUnresolvedJobIds=(x.unresolvedJobs||[]).map(String).filter(id=>!completed.has(id));
   bcApprovedEvents=x.approvedEvents||[];
   bcUnreadApprovedJobIds=[...new Set(bcApprovedEvents.filter(a=>{
    let seen='';try{seen=localStorage.getItem(bcApprovalSeenKey(a.jobId))||''}catch(e){}
@@ -1043,12 +1050,11 @@ async function bcJobsPoll(){
   }
   const updated=bcUnresolvedJobIds.length>0||bcUnreadApprovedJobIds.length>0;
   if(updated!==bcJobsHasNew){bcJobsHasNew=updated;bcSidebarDot('jobs',updated)}
-  if(page==='jobs')render();
  }catch(e){console.warn('Job notification refresh failed:',e)}
  finally{bcJobActivityBusy=false}
 }
 function bcActivityPoll(){bcTasksPoll();bcJobsPoll()}
-setInterval(bcActivityPoll,60000);
+setInterval(bcActivityPoll,12000);
 setTimeout(bcActivityPoll,3000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)bcActivityPoll()});
 
@@ -1360,6 +1366,7 @@ async function bcDetailReload(){
   if(requestedId!==bcDetailJobId)return;
   bcCoreJobs=list.jobs||[];
   bcJobsLoaded=true;
+  await bcJobsPoll();
  }catch(e){if(requestedId===bcDetailJobId)bcDetailError=e.message||String(e);}
  finally{if(requestedId===bcDetailJobId){bcDetailBusy=false;render();}}
 }
@@ -1379,6 +1386,7 @@ async function bcJobsAutoRefresh(){
   const changed=JSON.stringify(fresh.map(j=>[j.id,j.status,j.sync_status,j.updated_at]))!==
     JSON.stringify(bcCoreJobs.map(j=>[j.id,j.status,j.sync_status,j.updated_at]));
   bcCoreJobs=fresh;bcJobsLoaded=true;
+  if(changed)await bcJobsPoll();
   if(bcDetailJobId){
    const id=bcDetailJobId;
    const detail=await bcJobsRequest({action:'details',id});
