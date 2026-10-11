@@ -203,7 +203,7 @@ const links=[...document.querySelectorAll('[data-employee-nav]')];
 async function navigate(id){const target=document.getElementById(id);if(!target)return;
  if(id==='employee-messages'){const drawer=document.getElementById('bcMessagesDrawer');drawer.style.display='block';if(typeof bcMessagesEmployee!=='undefined')await bcMessagesEmployee.list();}
  if(id==='employee-email')await loadEmail();
- target.scrollIntoView({behavior:'smooth',block:'start'});links.forEach(a=>a.classList.toggle('active',a.dataset.employeeNav===id));sidebar.classList.remove('mobile-open');}
+ (id==='employee-messages'?document.getElementById('bcMessagesDrawer'):target).scrollIntoView({behavior:'smooth',block:'start'});links.forEach(a=>a.classList.toggle('active',a.dataset.employeeNav===id));sidebar.classList.remove('mobile-open');}
 links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();history.replaceState(null,'','#'+a.dataset.employeeNav);navigate(a.dataset.employeeNav)}));
 document.getElementById('employeeSidebarToggle').onclick=()=>sidebar.classList.toggle('mobile-open');
 document.getElementById('employeeSidebarSignout').onclick=()=>document.getElementById('signout').click();
@@ -212,7 +212,21 @@ async function loadEmail(){const box=document.getElementById('employeeEmailList'
  try{const {data:{session}}=await client.auth.getSession();if(!session)throw Error('Please sign in');
  const response=await fetch(url+'/functions/v1/blueprint-email-inbox',{method:'POST',headers:{'Content-Type':'application/json','apikey':key,'Authorization':'Bearer '+session.access_token},body:JSON.stringify({action:'list'})});
  const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to load email');
- const messages=result.messages||[];box.innerHTML=messages.length?messages.map(m=>'<div class="email-entry"><strong>'+escapeHtml(m.subject||'(No subject)')+'</strong><small>'+escapeHtml(m.sender||'')+' · '+escapeHtml(m.received_at?new Date(m.received_at).toLocaleString():'')+'</small></div>').join(''):'<p>No email conversations are assigned to you yet.</p>';
+ const messages=result.messages||[];
+ const groups=new Map();
+ for(const m of messages){
+  const subject=String(m.subject||'(No subject)').replace(/^(?:(?:re|fw|fwd)\s*:\s*)+/gi,'').trim()||'(No subject)';
+  const sender=String(m.sender||'').trim().toLowerCase();
+  const threadKey=subject.toLowerCase()+'|'+sender;
+  if(!groups.has(threadKey))groups.set(threadKey,{subject,sender:m.sender||'',messages:[]});
+  groups.get(threadKey).messages.push(m);
+ }
+ const threads=[...groups.values()];
+ box.innerHTML=threads.length?threads.map(t=>{
+  const latest=t.messages[0];
+  const count=t.messages.length;
+  return '<details class="employee-email-thread" style="border:1px solid #dce4ed;border-radius:10px;margin:10px 0;background:#fff;overflow:hidden"><summary style="cursor:pointer;padding:15px;list-style-position:inside"><strong>'+escapeHtml(t.subject)+'</strong><span style="float:right;color:#64748b;font-size:12px">'+count+' message'+(count===1?'':'s')+'</span><small style="display:block;margin:6px 0 0 20px;color:#64748b">'+escapeHtml(t.sender)+' · '+escapeHtml(latest.received_at?new Date(latest.received_at).toLocaleString():'')+'</small></summary><div style="border-top:1px solid #e2e8f0;padding:8px 16px">'+t.messages.map(m=>'<div style="padding:12px 0;border-bottom:1px solid #edf1f6"><strong>'+escapeHtml(m.subject||'(No subject)')+'</strong><small style="display:block;color:#64748b;margin-top:4px">'+escapeHtml(m.sender||'')+' · '+escapeHtml(m.received_at?new Date(m.received_at).toLocaleString():'')+'</small></div>').join('')+'</div></details>';
+ }).join(''):'<p>No email conversations are assigned to you yet.</p>';
  }catch(e){box.textContent='Unable to load assigned email: '+e.message}}
 document.getElementById('employeeEmailRefresh').onclick=loadEmail;
 })();
