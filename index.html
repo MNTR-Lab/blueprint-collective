@@ -992,8 +992,21 @@ function bcSidebarDot(id,on){
  if(on){const dot=document.createElement('span');dot.className='bc-new-mail-dot';dot.title=id==='jobs'?'New job or client approval activity':'New task added';dot.setAttribute('aria-label',dot.title);button.appendChild(dot)}
 }
 function bcJobsMarkSeen(){ /* Job action dots persist until revision approval is emailed. */ }
+let bcApprovedEvents=[],bcUnreadApprovedJobIds=[];
+function bcApprovalSeenKey(jobId){return bcNoticeKey('approval-reviewed-'+jobId)}
+function bcMarkJobApprovalSeen(jobId){
+ const approvals=bcApprovedEvents.filter(a=>String(a.jobId)===String(jobId));
+ const latest=approvals.map(a=>a.reviewedAt||'').sort().pop()||'';
+ if(latest)try{localStorage.setItem(bcApprovalSeenKey(jobId),latest)}catch(e){}
+ bcUnreadApprovedJobIds=bcUnreadApprovedJobIds.filter(id=>String(id)!==String(jobId));
+ bcJobsHasNew=bcUnresolvedJobIds.length>0||bcUnreadApprovedJobIds.length>0;
+ bcSidebarDot('jobs',bcJobsHasNew);
+}
 function bcJobAttentionDot(jobId){
- return bcUnresolvedJobIds.includes(String(jobId))?'<span class="bc-new-mail-dot" style="display:inline-block;position:static;vertical-align:middle;margin-left:7px" title="Client requested changes — revised approval email required" aria-label="Unresolved change request"></span>':'';
+ const changes=bcUnresolvedJobIds.includes(String(jobId));
+ const approved=bcUnreadApprovedJobIds.includes(String(jobId));
+ return (changes?'<span class="bc-new-mail-dot" style="display:inline-block;position:static;vertical-align:middle;margin-left:7px" title="Client requested changes — revised approval email required" aria-label="Unresolved change request"></span>':'')+
+ (approved?'<span style="display:inline-block;vertical-align:middle;margin-left:7px;font-size:12px;font-weight:700;color:#147d55" title="New client approval — open job to review">● Approved</span>':'');
 }
 function bcTasksSnapshot(){
  return JSON.stringify((data?.records?.tasks||[]).map(t=>({
@@ -1020,7 +1033,15 @@ async function bcJobsPoll(){
  try{
   const x=await bcJobsRequest({action:'notificationStatus'});
   bcUnresolvedJobIds=(x.unresolvedJobs||[]).map(String);
-  const updated=bcUnresolvedJobIds.length>0;
+  bcApprovedEvents=x.approvedEvents||[];
+  bcUnreadApprovedJobIds=[...new Set(bcApprovedEvents.filter(a=>{
+   let seen='';try{seen=localStorage.getItem(bcApprovalSeenKey(a.jobId))||''}catch(e){}
+   return !!a.reviewedAt&&(!seen||Date.parse(a.reviewedAt)>Date.parse(seen));
+  }).map(a=>String(a.jobId)))];
+  if(bcDetailJobId&&bcDetailData){
+   bcMarkJobApprovalSeen(bcDetailJobId);
+  }
+  const updated=bcUnresolvedJobIds.length>0||bcUnreadApprovedJobIds.length>0;
   if(updated!==bcJobsHasNew){bcJobsHasNew=updated;bcSidebarDot('jobs',updated)}
   if(page==='jobs')render();
  }catch(e){console.warn('Job notification refresh failed:',e)}
@@ -1312,6 +1333,7 @@ render=function(){
  }
 };
 async function bcDetailOpen(id){
+ bcMarkJobApprovalSeen(id);
  bcDetailJobId=id;bcDetailBusy=true;bcDetailError='';bcDetailData=null;render();
  await bcDetailReload();
 }
@@ -1434,7 +1456,9 @@ bcJobsPage=function(){
  const approvalHistory=events.length?'<details><summary>Approval history ('+events.length+')</summary>'+events.map(e=>'<div class="bc-workflow-event"><strong>'+h(e.event_type)+'</strong> · '+h(new Date(e.created_at).toLocaleString())+(e.note?' — '+h(e.note):'')+'</div>').join('')+'</details>':'';
  const eligibleDocs=docs.filter(d=>!approvals.some(a=>a.document_id===d.id));
  const docOptions=eligibleDocs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
- const approvalHtml='<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ const recentApproved=approvals.filter(a=>a.status==='Approved').sort((a,b)=>new Date(b.reviewed_at)-new Date(a.reviewed_at))[0];
+ const approvalNotice=recentApproved?'<div style="padding:12px 15px;margin:10px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:9px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><div style="font-size:12px;margin-top:4px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
+ const approvalHtml=approvalNotice+'<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
  let emailsHtml='';
