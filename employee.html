@@ -237,7 +237,7 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
   {id:'employee-jobs',label:'My Jobs & Projects',open:true},
   {id:'employee-tasks',label:'Assigned Tasks',open:false},
   {id:'employee-email',label:'My Assigned Email',open:false},
-  {id:'bcMessagesDrawer',label:'Team Messages',open:false}
+  {id:'bcMessagesDrawer',label:'Team Messages',open:true}
  ];
  const folds=new Map();
  for(const item of items){
@@ -253,7 +253,7 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
   const chevron=document.createElement('span');chevron.className='fold-chevron';chevron.textContent='⌄';chevron.setAttribute('aria-hidden','true');
   button.append(name,chevron);section.append(button,contents);
   const setOpen=open=>{section.classList.toggle('is-open',open);button.setAttribute('aria-expanded',String(open));contents.hidden=!open};
-  setOpen(item.open);button.addEventListener('click',()=>setOpen(!section.classList.contains('is-open')));
+  setOpen(item.open);button.addEventListener('click',()=>{const next=!section.classList.contains('is-open');setOpen(next);if(next&&item.id==='bcMessagesDrawer'&&typeof bcMessagesEmployee!=='undefined')bcMessagesEmployee.list()});
   folds.set(item.id,{section,setOpen});
   if(item.id==='bcMessagesDrawer'&&previousDisplay==='none')section.style.display='block';
  }
@@ -266,6 +266,7 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  document.querySelectorAll('[data-employee-nav]').forEach(link=>link.addEventListener('click',()=>openForNavigation(link.dataset.employeeNav),true));
  document.getElementById('bcUnreadMessageShortcut')?.addEventListener('click',()=>openForNavigation('employee-messages'),true);
  document.addEventListener('click',e=>{if(e.target.closest('#bcUnreadMessageShortcut'))openForNavigation('employee-messages')},true);
+ if(!document.getElementById('workspace').classList.contains('hide')&&typeof bcMessagesEmployee!=='undefined')bcMessagesEmployee.list();
  const hash=location.hash.slice(1);if(hash)openForNavigation(hash);
 })();
 </script>
