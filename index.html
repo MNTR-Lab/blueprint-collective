@@ -71,6 +71,25 @@
 .bc-followup-collapsible[open] .bc-followup-chevron{transform:rotate(180deg)}
 .bc-followup-content{padding:12px 18px 18px}
 </style>
+<style>
+.bc-followup-items{display:grid;gap:9px}
+.bc-followup-item{border:1px solid #dbe3ed;border-radius:10px;background:#fff;overflow:hidden}
+.bc-followup-item-head{display:flex;align-items:center;gap:12px;cursor:pointer;padding:14px 15px;list-style:none}
+.bc-followup-item-head::-webkit-details-marker{display:none}
+.bc-followup-item-main{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.bc-followup-item-main strong{font-size:14px;overflow-wrap:anywhere}
+.bc-followup-item-main small{color:#64748b}
+.bc-followup-item-status{white-space:nowrap;border-radius:14px;padding:5px 9px;font-size:12px;font-weight:700}
+.bc-followup-pending{background:#fff3dc;color:#86510c}
+.bc-followup-complete{background:#e6f5ec;color:#23613d}
+.bc-followup-item-chevron{font-size:20px;color:#52657b}
+.bc-followup-item[open] .bc-followup-item-chevron{transform:rotate(180deg)}
+.bc-followup-item-body{border-top:1px solid #e6ebf2;padding:15px;display:grid;gap:15px}
+.bc-followup-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:14px}
+.bc-followup-fields>div{display:grid;gap:4px}
+.bc-followup-fields small{color:#64748b}
+.bc-followup-item-body>.btn{justify-self:start}
+</style>
 </head><body><div class="shell"><aside class="side"><div class="brand brand-logo"><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback" style="display:none">BLUEPRINT <small>COLLECTIVE</small></span></div><nav id="nav"></nav><div class="provider-footer"><span class="provider-label">PLATFORM POWERED BY</span><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="provider-fallback" style="display:none">Blueprint Collective</span></div></aside><div class="main"><header class="top"><h1 id="topTitle">Dashboard</h1><div style="display:flex;align-items:center;gap:12px"><select id="businessSelect" class="field" aria-label="Business selector"></select><span class="pill">Demo workspace</span></div></header><main class="content" id="view"></main></div></div><div class="modalbg" id="modalbg"><div class="modal" id="modal"></div></div><script>
 const K='blueprint-crm-v1-local';const sample={businesses:[{id:'blueprint',name:'Blueprint Collective',color:'#163b65'}],records:{leads:[{id:'l1',businessId:'blueprint',name:'Morgan Parker',company:'Summit Athletics',email:'morgan@example.com',status:'Qualified',value:5200,owner:'Admin'},{id:'l2',businessId:'blueprint',name:'Taylor Reed',company:'Northstar Media',email:'taylor@example.com',status:'New',value:1800,owner:'Admin'},{id:'l3',businessId:'blueprint',name:'Jordan Lee',company:'Peak Events',email:'jordan@example.com',status:'Contacted',value:3600,owner:'Admin'}],clients:[{id:'c1',businessId:'blueprint',name:'Evergreen Sports',email:'hello@example.com',status:'Active',owner:'Admin'},{id:'c2',businessId:'blueprint',name:'Harbor Creative',email:'contact@example.com',status:'Prospect',owner:'Admin'}],contacts:[{id:'ct1',businessId:'blueprint',name:'Alex Morgan',company:'Evergreen Sports',email:'alex@example.com',status:'Primary'}],deals:[{id:'d1',businessId:'blueprint',name:'Spring Campaign',company:'Evergreen Sports',value:12000,status:'Proposal Sent',owner:'Admin'},{id:'d2',businessId:'blueprint',name:'Brand Refresh',company:'Harbor Creative',value:7500,status:'Discovery',owner:'Admin'}],jobs:[{id:'j1',businessId:'blueprint',name:'Website Refresh',company:'Evergreen Sports',status:'In Progress',owner:'Admin'}],tasks:[{id:'t1',businessId:'blueprint',name:'Follow up on proposal',company:'Evergreen Sports',status:'Open',owner:'Admin'}]},connections:[]};
 let data;try{data=JSON.parse(localStorage.getItem(K))||structuredClone(sample)}catch{data=structuredClone(sample)};let page='dashboard',business='blueprint',search='',clientTab='active',settingsTab='businesses';const navs=[['dashboard','▦','Dashboard'],['team-directory','♙','Team Directory'],['email','✉','Email Inbox'],['client-management','▣','Clients'],['leads','◎','Leads'],['deals','◇','Opportunities'],['jobs','▤','Jobs & Projects'],['tasks','☷','Tasks & Activities'],['revenue','▥','Revenue Goals'],['settings','⚙','Settings'],['logout','⇥','Log Out']];const schemas={leads:{title:'Leads',fields:['name','company','email','status','value','owner'],statuses:['New','Contacted','Qualified','Unqualified','Converted']},clients:{title:'Companies & Clients',fields:['name','email','status','owner'],statuses:['Prospect','Active','Inactive','Archived']},contacts:{title:'Contacts',fields:['name','company','email','status'],statuses:['Primary','Secondary','Other']},deals:{title:'Opportunities',fields:['name','company','value','status','owner'],statuses:['Discovery','Quoting','Proposal Sent','Negotiation','Won','Lost']},jobs:{title:'Jobs & Projects',fields:['name','company','status','owner'],statuses:['Not Started','In Progress','On Hold','Completed']},tasks:{title:'Activities & Tasks',fields:['name','company','status','owner'],statuses:['Open','In Progress','Completed']}};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const save=()=>localStorage.setItem(K,JSON.stringify(data));const records=k=>data.records[k].filter(x=>x.businessId===business);const fmt=n=>'$'+Number(n||0).toLocaleString();const badge=s=>{let c=/active|won|qualified|completed/i.test(s)?'green':/new|progress|proposal|contacted/i.test(s)?'orange':/lost|unqualified/i.test(s)?'red':'gray';return `<span class="status ${c}">${esc(s)}</span>`};function render(){document.getElementById('nav').innerHTML=navs.map(([id,icon,label])=>`<button class="nav ${page===id?'active':''}" onclick="${id==='logout'?'bcLogout()':`navigate('${id}')`}"><span>${icon}</span>${label}${id==='email'&&bcMailHasNew?'<span class="bc-new-mail-dot" title="New email received" aria-label="New email received"></span>':''}${id==='jobs'&&bcJobsHasNew?'<span class="bc-new-mail-dot" title="New job or client approval activity" aria-label="New job activity"></span>':''}${id==='tasks'&&bcTasksHasNew?'<span class="bc-new-mail-dot" title="New task added" aria-label="New task"></span>':''}</button>`).join('');document.getElementById('topTitle').textContent=navs.find(n=>n[0]===page)[2];document.getElementById('businessSelect').innerHTML=data.businesses.map(b=>`<option value="${esc(b.id)}" ${business===b.id?'selected':''}>${esc(b.name)}</option>`).join('');document.getElementById('businessSelect').onchange=e=>{business=e.target.value;search='';render()};document.getElementById('view').innerHTML=page==='dashboard'?dashboard():page==='team-directory'?'<div class="heading"><div><h2>Team Directory</h2><p>Manage your team members and invitations.</p></div></div><section class="panel"><p>Select Team Directory to manage employees.</p></section>':page==='revenue'?bcRevenuePage():page==='client-management'?clientManagement():schemas[page]?listPage(page):page==='connections'?connections():page==='contacts'?listPage('contacts'):page==='clients'?clientManagement():settings();}function navigate(p){page=p;search='';if(p==='email')bcMailMarkSeen();if(p==='tasks')bcTasksMarkSeen();render();if(p==='team-directory')bcOpenTeamDirectory()}
@@ -2796,9 +2815,22 @@ bcTaskDashboard=function(){
   (bcTaskAssignee==='all'||(bcTaskAssignee==='unassigned'?!t.assigned_user_id:String(t.assigned_user_id)===String(bcTaskAssignee))&&
   (!bcTaskQuery||[t.subject,t.sender,staffNames[t.assigned_user_id]].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))))
  );
- const rows=relevant.map(t=>'<tr><td><strong>'+((t.status!=='Completed')?'<span class="bc-new-mail-dot" title="Email follow-up needs attention" aria-label="Needs attention" style="display:inline-block;position:static;vertical-align:middle;margin-right:9px"></span>':'')+bcInboxEscape(t.subject||'(No subject)')+'</strong><small>Email follow-up · '+bcInboxEscape(t.sender||'')+'</small></td>'+
- '<td>'+bcInboxEscape(staffNames[t.assigned_user_id]||'Assigned employee')+'</td><td>Not set</td><td>Normal</td><td>'+bcInboxEscape(t.status)+'</td>'+
- '<td><button class="btn secondary" onclick="bcOpenFollowupConversation('+JSON.stringify(t.thread_key).replace(/"/g,'&quot;')+')">Open Email</button></td></tr>').join('');
+ const rows=relevant.map(t=>{
+  const pending=t.status!=='Completed';
+  const threadArg=JSON.stringify(t.thread_key).replace(/"/g,'&quot;');
+  return '<details class="bc-followup-item"><summary class="bc-followup-item-head">'+
+   '<span class="bc-followup-item-main">'+(pending?'<span class="bc-new-mail-dot" title="Email follow-up needs attention" style="display:inline-block;position:static;vertical-align:middle;margin-right:8px"></span>':'')+
+   '<strong>'+bcInboxEscape(t.subject||'(No subject)')+'</strong>'+
+   '<small>'+bcInboxEscape(t.sender||'Unknown sender')+'</small></span>'+
+   '<span class="bc-followup-item-status '+(pending?'bc-followup-pending':'bc-followup-complete')+'">'+bcInboxEscape(t.status)+'</span>'+
+   '<span class="bc-followup-item-chevron" aria-hidden="true">⌄</span></summary>'+
+   '<div class="bc-followup-item-body"><div class="bc-followup-fields">'+
+   '<div><small>Assigned To</small><strong>'+bcInboxEscape(staffNames[t.assigned_user_id]||'Unassigned')+'</strong></div>'+
+   '<div><small>Due Date</small><strong>Not set</strong></div>'+
+   '<div><small>Priority</small><strong>Normal</strong></div>'+
+   '<div><small>Status</small><strong>'+bcInboxEscape(t.status)+'</strong></div>'+
+   '</div><button class="btn secondary" onclick="bcOpenFollowupConversation('+threadArg+')">Open Email</button></div></details>';
+ }).join('');
  const outstanding=bcEmailFollowups.filter(t=>t.status!=='Completed').length;
  const panel='<details class="panel bc-task-panel bc-followup-collapsible" '+(outstanding?'open':'')+'>'+
  '<summary class="bc-followup-summary"><span class="bc-followup-title">Email Follow-Up Tasks</span>'+
@@ -2806,8 +2838,8 @@ bcTaskDashboard=function(){
  '<span class="bc-followup-chevron" aria-hidden="true">⌄</span></summary>'+
  '<div class="bc-followup-content"><p class="notice">Email conversations assigned for follow-up. Open items remain visible until resolved.</p>'+
  (bcEmailFollowupError?'<p class="notice">'+bcInboxEscape(bcEmailFollowupError)+'</p>':'')+
- '<div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Conversation</th><th>Assigned To</th><th>Due Date</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody>'+
- (rows||'<tr><td colspan="6" class="muted">No matching email follow-up tasks.</td></tr>')+'</tbody></table></div></div></details>';
+ '<div class="bc-followup-items">'+
+ (rows||'<p class="muted">No matching email follow-up tasks.</p>')+'</div></div></details>';
  return html.replace('<section class="panel bc-task-panel">',panel+'<section class="panel bc-task-panel">');
 };
 const bcFollowupOldThreadLoad=bcThreadLoad;
