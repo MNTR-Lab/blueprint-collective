@@ -1955,4 +1955,49 @@ const oldNavigate=navigate;
 navigate=function(p){if(p==='tasks'){oldNavigate(p);bcProdLoad();bcCoreLoadJobs();return}if(p==='production'||p==='production-settings'){page=p;search='';render();if(!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs().then(()=>{if(page==='production')render()});bcProdLoad();return}oldNavigate(p)};
 })();
 </script>
+
+<script>
+/* Production assignment alerts: employee-scoped, persistent until acknowledged or completed. */
+let bcProductionAlerts=[];
+async function bcLoadProductionAlerts(){
+ const staff=(typeof bcStaff!=='undefined'?bcStaff:[]).find(x=>x.user_id===bcSession?.user?.id&&x.active);
+ if(!staff){bcProductionAlerts=[];return}
+ try{
+  const r=await bcJobsRequest({action:'productionNotifications',staffId:staff.id});
+  bcProductionAlerts=r.items||[];
+ }catch(e){console.warn('Production alerts:',e)}
+ bcRenderProductionAlertDots();
+}
+function bcRenderProductionAlertDots(){
+ document.querySelectorAll('[data-bc-production-dot]').forEach(x=>x.remove());
+ if(!bcProductionAlerts.length)return;
+ for(const el of document.querySelectorAll('button,a')){
+  if(el.closest('table'))continue;
+  if(el.textContent.trim().includes('Tasks & Activities')&&el.textContent.length<90){
+   const dot=document.createElement('span');
+   dot.dataset.bcProductionDot='1';dot.textContent=' ●';dot.style.color='#d82e38';dot.title=bcProductionAlerts.length+' production assignment(s) need attention';
+   el.appendChild(dot);
+  }
+ }
+}
+async function bcAcknowledgeProductionAlert(id){
+ try{await bcJobsRequest({action:'productionAcknowledge',notificationId:id});await bcLoadProductionAlerts();render()}
+ catch(e){alert('Unable to acknowledge: '+e.message)}
+}
+const bcTaskDashboardBeforeProductionAlerts=bcTaskDashboard;
+bcTaskDashboard=function(){
+ const html=bcTaskDashboardBeforeProductionAlerts();
+ const notice='<section class="panel bc-task-panel" style="margin-top:18px"><h3>Production assignment notifications'+(bcProductionAlerts.length?' <span style="color:#d82e38">● '+bcProductionAlerts.length+'</span>':'')+'</h3>'+
+ (bcProductionAlerts.length?bcProductionAlerts.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #ddd"><div><strong>'+esc(n.title)+'</strong><small style="display:block">'+esc(n.message)+'</small></div><button class="btn secondary" onclick="bcAcknowledgeProductionAlert(&quot;'+n.id+'&quot;)">Acknowledge</button></div>').join(''):'<p class="notice">No production assignments requiring acknowledgement.</p>')+'</section>';
+ return html+notice;
+};
+const bcProductionAlertsOldNavigate=navigate;
+navigate=function(p){
+ bcProductionAlertsOldNavigate(p);
+ if(p==='tasks'){bcLoadProductionAlerts().then(()=>{if(page==='tasks')render()})}
+};
+setTimeout(()=>{if(bcSession)bcLoadProductionAlerts()},2000);
+setInterval(()=>{if(bcSession&&!document.hidden)bcLoadProductionAlerts()},30000);
+</script>
+
 </body></html>
