@@ -1284,6 +1284,13 @@ async function bcJobSubmit(e){
 }
 let bcJobsArchiveTab='active';
 window.bcJobsSwitchTab=tab=>{bcJobsArchiveTab=tab;bcDetailJobId='';bcJobFormOpen=false;render()};
+window.bcJobsRetrySync=async id=>{
+ try{
+  const r=await bcJobsRequest({action:'retryJobSync',id});
+  await bcCoreLoadJobs();
+  if(r.job?.sync_status!=='synced')alert('Sync still pending. The database has retained the error for review.');
+ }catch(err){alert('Unable to synchronize job: '+String(err.message||err))}
+};
 window.bcJobsReopen=async id=>{
  if(!confirm('Reopen this completed job and return it to In Production? Its artwork, production, shipping and approval history will be preserved.'))return;
  try{
@@ -1306,7 +1313,7 @@ function bcJobsPage(){
  '<label>Due Date<input name="dueDate" type="date" style="width:100%;padding:10px" value="'+esc(editing?.due_date||'')+'"></label>'+
  (editing?'<label>Status<select name="status" style="width:100%;padding:10px">'+statuses+'</select></label>':'<p class="muted">New jobs start with status: New</p>')+
  '<div><button class="btn" type="submit">'+(editing?'Save Job Changes':'Create Job')+'</button> <button class="btn secondary" type="button" onclick="bcJobCancel()">Cancel</button></div></form></section>':'';
- const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b>'+bcJobAttentionDot(j.id)+'</td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Blueprint Collective database synchronization status">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit</button></td></tr>').join('');
+ const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b>'+bcJobAttentionDot(j.id)+'</td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Blueprint Collective database synchronization status">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit</button>'+(bcJobsArchiveTab==='completed'?' <button class="btn secondary" onclick="bcJobsReopen(\''+esc(j.id)+'\')">Reopen</button>':'')+(j.sync_status!=='synced'?' <button class="btn secondary" onclick="bcJobsRetrySync(\''+esc(j.id)+'\')">Retry Sync</button>':'')+'</td></tr>').join('');
  return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcCoreLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
  '<section class="panel"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn '+(bcJobsArchiveTab==='active'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'active\')">Active Jobs ('+bcCoreJobs.filter(j=>!['Completed','Closed'].includes(j.status)).length+')</button><button class="btn '+(bcJobsArchiveTab==='completed'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'completed\')">Completed / Archived ('+bcCoreJobs.filter(j=>['Completed','Closed'].includes(j.status)).length+')</button></div><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
  '<p class="muted">'+list.length+' job(s)'+(client?' for '+esc(client.name):'')+' · Jobs are managed in Blueprint Collective.</p></section>'+
