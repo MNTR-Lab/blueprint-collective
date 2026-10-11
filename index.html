@@ -2786,7 +2786,7 @@ bcTaskDashboard=function(){
   (bcTaskAssignee==='all'||(bcTaskAssignee==='unassigned'?!t.assigned_user_id:String(t.assigned_user_id)===String(bcTaskAssignee))&&
   (!bcTaskQuery||[t.subject,t.sender,staffNames[t.assigned_user_id]].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))))
  );
- const rows=relevant.map(t=>'<tr><td><strong>'+bcInboxEscape(t.subject||'(No subject)')+'</strong><small>Email follow-up · '+bcInboxEscape(t.sender||'')+'</small></td>'+
+ const rows=relevant.map(t=>'<tr><td><strong>'+((t.status!=='Completed')?'<span class="bc-new-mail-dot" title="Email follow-up needs attention" aria-label="Needs attention" style="display:inline-block;position:static;vertical-align:middle;margin-right:9px"></span>':'')+bcInboxEscape(t.subject||'(No subject)')+'</strong><small>Email follow-up · '+bcInboxEscape(t.sender||'')+'</small></td>'+
  '<td>'+bcInboxEscape(staffNames[t.assigned_user_id]||'Assigned employee')+'</td><td>Not set</td><td>Normal</td><td>'+bcInboxEscape(t.status)+'</td>'+
  '<td><button class="btn secondary" onclick="bcOpenFollowupConversation('+JSON.stringify(t.thread_key).replace(/"/g,'&quot;')+')">Open Email</button></td></tr>').join('');
  const panel='<section class="panel bc-task-panel" style="margin-top:18px"><div class="bc-task-toolbar"><div><h3>Email follow-up tasks</h3>'+
@@ -2798,5 +2798,25 @@ bcTaskDashboard=function(){
 };
 const bcFollowupOldThreadLoad=bcThreadLoad;
 bcThreadLoad=async function(){await bcFollowupOldThreadLoad();if(page==='tasks')await bcLoadEmailFollowups()};
+</script>
+
+<script>
+/* Follow-up dots stay until resolution, including after the tasks page is viewed. */
+function bcEmailFollowupsPending(){return bcEmailFollowups.some(t=>t.status!=='Completed')}
+const bcEmailDotOldRender=render;
+render=function(){
+ bcEmailDotOldRender();
+ if(bcEmailFollowupsPending()){
+  const nav=document.getElementById('nav');
+  const button=nav&&[...nav.querySelectorAll('button')].find(b=>b.textContent.includes('Tasks & Activities'));
+  if(button&&!button.querySelector('.bc-new-mail-dot')){
+   const dot=document.createElement('span');
+   dot.className='bc-new-mail-dot';
+   dot.title='Email follow-up needs attention';
+   dot.setAttribute('aria-label',dot.title);
+   button.appendChild(dot);
+  }
+ }
+};
 </script>
 </body></html>
