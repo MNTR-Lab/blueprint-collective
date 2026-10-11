@@ -2419,4 +2419,58 @@ bcInboxDetail=function(m){
  return html.replace('<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">','<section style="margin-top:14px;border-top:1px solid #dce4ee;padding-top:12px"><h4>Conversation attachments</h4>'+groups+'</section><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">');
 };
 </script>
+
+<script>
+/* Step 4: persistent conversation ownership and workflow */
+let bcThreadStates={},bcThreadStaff=[],bcThreadBusy=false,bcThreadError='';
+function bcThreadCurrent(m){
+ const key=bcMailThreadKey(m),state=bcThreadStates[key]||{};
+ const latest=bcInboxMessages.filter(x=>bcMailThreadKey(x)===key).reduce((a,x)=>!a||new Date(x.received_at)>new Date(a)?x.received_at:a,null);
+ const reopened=state.last_handled_at&&latest&&new Date(latest)>new Date(state.last_handled_at);
+ return {key,status:reopened?'Open':(state.status||'Open'),assigned_to:state.assigned_to||'',reopened};
+}
+async function bcThreadLoad(){
+ try{
+  const x=await bcMailJobRequest('threadState');
+  bcThreadStates=Object.fromEntries((x.states||[]).map(t=>[t.thread_key,t]));
+  bcThreadStaff=x.staff||[];bcThreadError='';
+ }catch(e){bcThreadError='Conversation status could not be loaded: '+(e.message||e)}
+ if(page==='email')render();
+}
+async function bcThreadSave(id){
+ const m=bcInboxMessages.find(x=>String(x.id)===String(id));if(!m)return;
+ const status=document.getElementById('bcThreadStatus')?.value||'Open';
+ const assignedTo=document.getElementById('bcThreadAssigned')?.value||null;
+ bcThreadBusy=true;render();
+ try{
+  await bcMailJobRequest('updateThread',{threadKey:bcMailThreadKey(m),status,assignedTo});
+  await bcThreadLoad();
+ }catch(e){alert('Unable to save conversation: '+(e.message||e))}
+ finally{bcThreadBusy=false;render()}
+}
+const bcThreadOldDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ const html=bcThreadOldDetail(m);if(!m)return html;
+ const st=bcThreadCurrent(m);
+ const options=['Open','Waiting','Resolved'].map(x=>'<option value="'+x+'" '+(st.status===x?'selected':'')+'>'+x+'</option>').join('');
+ const staff='<option value="">Unassigned</option>'+bcThreadStaff.map(u=>'<option value="'+bcInboxEscape(u.id)+'" '+(st.assigned_to===u.id?'selected':'')+'>'+bcInboxEscape(u.email)+'</option>').join('');
+ const panel='<div style="border:1px solid #dce4ee;border-radius:8px;padding:12px;margin:12px 0"><strong>Conversation assignment &amp; status</strong>'+(st.reopened?'<p style="color:#ad5800">New client response — automatically reopened</p>':'')+
+ '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"><label>Status <select id="bcThreadStatus">'+options+'</select></label><label>Assigned to <select id="bcThreadAssigned">'+staff+'</select></label><button class="btn" onclick="bcThreadSave(\''+bcInboxEscape(m.id)+'\')" '+(bcThreadBusy?'disabled':'')+'>Save</button></div>'+(bcThreadError?'<p class="muted">'+bcInboxEscape(bcThreadError)+'</p>':'')+'</div>';
+ return html.replace('<h3>',panel+'<h3>');
+};
+const bcThreadOldInboxLayout=bcInboxLayout;
+bcInboxLayout=function(){
+ let html=bcThreadOldInboxLayout();
+ if(bcMailTab!=='inbox')return html;
+ for(const t of bcMailBuildThreads(bcInboxVisibleMessages())){
+  const m=t.latest,st=bcThreadCurrent(m);
+  const label=st.status+(st.assigned_to?' · '+(bcThreadStaff.find(u=>u.id===st.assigned_to)?.email||'Assigned'):'');
+  const needle='<small>'+bcInboxEscape(m.sender)+'</small>';
+  html=html.replace(needle,needle+'<small style="font-weight:600">'+bcInboxEscape(label)+'</small>');
+ }
+ return html;
+};
+const bcThreadOldLoadInbox=bcLoadInbox;
+bcLoadInbox=async function(){await bcThreadOldLoadInbox();await bcThreadLoad()};
+</script>
 </body></html>
