@@ -1245,7 +1245,7 @@ bcOpenInboxMessage=function(id){bcEmailLinkFeedback='';bcOpenInboxMessageBeforeL
 
 /* Blueprint Collective Jobs & Projects: Blueprint is the sole editing interface. */
 let bcCoreJobs=[],bcJobsBusy=false,bcJobsError='',bcJobClientFilter='',bcJobEditing='',bcJobFormOpen=false,bcJobsLoaded=false;
-const bcCoreJobStatuses=['New','In Progress','Awaiting Approval','Completed','Closed'];
+const bcCoreJobStatuses=['New','In Progress','Awaiting Approval','Ready for Production','In Production','Completed','Closed'];
 async function bcJobsRequest(payload){
  if(!bcSession?.access_token)throw Error('Please log in again');
  if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60)await bcRefreshSession();
@@ -1439,6 +1439,22 @@ async function bcDetailDownload(documentId){
 
 <script>
 /* Blueprint Collective: internal job approvals and job correspondence */
+async function bcJobUpdateProductionStatus(event){
+ event.preventDefault();
+ const form=event.currentTarget,button=form.querySelector('button[type=submit]');
+ const status=form.elements.status.value,job=bcDetailData?.job;
+ if(!job||!bcDetailJobId)return;
+ if(status===job.status)return;
+ if(!confirm('Change job '+(job.job_number||'')+' to '+status+'?'))return;
+ button.disabled=true;
+ try{
+  await bcJobsRequest({action:'update',id:bcDetailJobId,status});
+  await bcDetailReload();
+  await bcCoreLoadJobs();
+ }catch(err){alert('Unable to update production status: '+(err.message||err))}
+ finally{button.disabled=false}
+}
+
 let bcJobEmailData=null,bcJobEmailBusy=false;
 const bcJobPageBeforeWorkflow=bcJobsPage;
 bcJobsPage=function(){
@@ -1458,7 +1474,10 @@ bcJobsPage=function(){
  const docOptions=eligibleDocs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
  const recentApproved=approvals.filter(a=>a.status==='Approved').sort((a,b)=>new Date(b.reviewed_at)-new Date(a.reviewed_at))[0];
  const approvalNotice=recentApproved?'<div style="padding:12px 15px;margin:10px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:9px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><div style="font-size:12px;margin-top:4px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
- const approvalHtml=approvalNotice+'<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ const currentJob=bcDetailData.job||{};
+ const statusOptions=bcCoreJobStatuses.map(st=>'<option value="'+h(st)+'" '+(currentJob.status===st?'selected':'')+'>'+h(st)+'</option>').join('');
+ const productionControls='<section class="bc-workflow-box" style="margin-bottom:14px"><div class="bc-workflow-title"><h3>Production Status</h3></div><p class="muted">Client approval does not automatically change production status. Update this manually when the job is ready.</p><form onsubmit="bcJobUpdateProductionStatus(event)" style="display:flex;align-items:end;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:180px">Job Status<select name="status" style="width:100%;padding:10px">'+statusOptions+'</select></label><button type="submit" class="btn">Save Status</button></form></section>';
+ const approvalHtml=productionControls+approvalNotice+'<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
  let emailsHtml='';
