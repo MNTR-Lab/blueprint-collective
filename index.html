@@ -1320,4 +1320,93 @@ async function bcDetailDownload(documentId){
 .bc-doc-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}
 @media(max-width:600px){.bc-doc-viewer{padding:6px}.bc-doc-viewer-panel{height:95vh}.bc-doc-viewer-header{flex-wrap:wrap}.bc-doc-viewer-header>div{width:100%;justify-content:flex-end}}
 </style>
+
+<script>
+/* Blueprint Collective: internal job approvals and job correspondence */
+let bcJobEmailData=null,bcJobEmailBusy=false;
+const bcJobPageBeforeWorkflow=bcJobsPage;
+bcJobsPage=function(){
+ let html=bcJobPageBeforeWorkflow();
+ if(!bcDetailJobId||!bcDetailData)return html;
+ const h=esc,docs=bcDetailData.documents||[],approvals=bcDetailData.approvals||[],events=bcDetailData.approvalEvents||[];
+ const fileName=id=>docs.find(d=>d.id===id)?.filename||'Document';
+ const approvalRows=approvals.map(a=>{
+ const status=h(a.status),pending=a.status==='Pending Approval';
+ const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button>':'';
+ return '<div class="bc-workflow-record"><div><strong>'+h(fileName(a.document_id))+'</strong><div class="muted">'+status+' · '+new Date(a.requested_at).toLocaleString()+'</div>'+(a.review_note?'<p>'+h(a.review_note)+'</p>':'')+'</div><div>'+actions+'</div></div>';
+ }).join('');
+ const approvalHistory=events.length?'<details><summary>Approval history ('+events.length+')</summary>'+events.map(e=>'<div class="bc-workflow-event"><strong>'+h(e.event_type)+'</strong> · '+h(new Date(e.created_at).toLocaleString())+(e.note?' — '+h(e.note):'')+'</div>').join('')+'</details>':'';
+ const docOptions=docs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
+ const approvalHtml='<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ (docs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p>Upload a document above to request approval.</p>')+
+ (approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
+ let emailsHtml='';
+ if(bcJobEmailBusy)emailsHtml='<p>Loading correspondence…</p>';
+ else if(!bcJobEmailData)emailsHtml='<button class="btn secondary" onclick="bcJobLoadEmails()">Load Emails</button>';
+ else{
+  const links=bcDetailData.emailLinks||[];
+  const combined=[...(bcJobEmailData.incoming||[]).map(e=>({...e,direction:'incoming',when:e.received_at})),...(bcJobEmailData.outgoing||[]).map(e=>({...e,direction:'outgoing',when:e.sent_at||e.created_at}))].sort((a,b)=>new Date(b.when)-new Date(a.when));
+  const available=combined.filter(e=>!bcJobEmailData.links.some(l=>l.email_id===e.id&&l.job_id!==bcDetailJobId&&l.direction===e.direction));
+  const linked=available.filter(e=>links.some(l=>l.email_id===e.id&&l.direction===e.direction));
+  const unlinked=available.filter(e=>!links.some(l=>l.email_id===e.id&&l.direction===e.direction));
+  const formatEmail=e=>'<strong>'+h(e.subject||'(No subject)')+'</strong><div class="muted">'+h(e.direction==='incoming'?'Received':'Sent')+' · '+h(e.sender||'')+' → '+h(e.recipient||'')+' · '+h(e.when?new Date(e.when).toLocaleString():'')+'</div>';
+  const linkedRows=linked.map(e=>'<div class="bc-workflow-record"><div>'+formatEmail(e)+'</div><button class="btn secondary" onclick="bcJobEmailLink(\''+e.id+'\',\''+e.direction+'\',false)">Unlink</button></div>').join('');
+  const options=unlinked.map(e=>'<option value="'+h(e.direction+':'+e.id)+'">'+h((e.direction==='incoming'?'IN':'OUT')+' · '+(e.subject||'(No subject)')+' · '+(e.sender||''))+'</option>').join('');
+  emailsHtml='<div class="bc-workflow-form"><label>Find existing CRM correspondence<select id="bcJobEmailChoice">'+(options||'<option value="">No unlinked emails available</option>')+'</select></label><button class="btn" type="button" onclick="bcJobAttachSelectedEmail()" '+(!options?'disabled':'')+'>Link to Job</button><button class="btn secondary" type="button" onclick="bcJobLoadEmails()">Refresh</button></div>'+(linkedRows||'<p class="muted">No emails linked to this job yet.</p>')+'<p class="muted">Shows the latest 100 incoming and 100 outgoing emails. Emails already linked to other jobs are excluded.</p>';
+ }
+ const emailHtml='<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Job Correspondence</h3><span class="bc-workflow-pill">CRM email</span></div><p class="muted">Link existing client emails to this job. Original messages remain in the CRM inbox and sent mail.</p>'+emailsHtml+'</section>';
+ const insertAt=html.lastIndexOf('</section>');
+ return insertAt>=0?html.slice(0,insertAt)+approvalHtml+emailHtml+html.slice(insertAt):html+approvalHtml+emailHtml;
+};
+const bcDetailOpenBeforeWorkflow=bcDetailOpen;
+bcDetailOpen=async function(id){bcJobEmailData=null;bcJobEmailBusy=false;await bcDetailOpenBeforeWorkflow(id)};
+const bcDetailCloseBeforeWorkflow=bcDetailClose;
+bcDetailClose=function(){bcJobEmailData=null;bcDetailCloseBeforeWorkflow()};
+async function bcJobRequestApproval(event){
+ event.preventDefault();
+ const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;
+ try{await bcJobsRequest({action:'requestApproval',id:bcDetailJobId,documentId:form.elements.documentId.value});await bcDetailReload()}
+ catch(err){alert('Approval request failed: '+err.message);button.disabled=false}
+}
+async function bcJobReview(approvalId,status){
+ const note=status==='Changes Requested'?prompt('What changes are needed?'):prompt('Optional approval note (leave blank if none):');
+ if(note===null)return;
+ if(status==='Changes Requested'&&!note.trim()){alert('Please describe the requested changes.');return}
+ try{await bcJobsRequest({action:'reviewApproval',id:bcDetailJobId,approvalId,status,note:note.trim()});await bcDetailReload()}
+ catch(err){alert('Unable to save decision: '+err.message)}
+}
+async function bcJobLoadEmails(){
+ bcJobEmailBusy=true;render();
+ try{bcJobEmailData=await bcJobsRequest({action:'emailCandidates',id:bcDetailJobId})}
+ catch(err){alert('Unable to load correspondence: '+err.message)}
+ finally{bcJobEmailBusy=false;render()}
+}
+async function bcJobAttachSelectedEmail(){
+ const v=document.getElementById('bcJobEmailChoice')?.value;
+ if(!v)return;
+ const [direction,emailId]=v.split(':');
+ await bcJobEmailLink(emailId,direction,true);
+}
+async function bcJobEmailLink(emailId,direction,attach){
+ try{
+ await bcJobsRequest({action:attach?'linkEmail':'unlinkEmail',id:bcDetailJobId,emailId,direction});
+ await bcDetailReload();await bcJobLoadEmails();
+ }catch(err){alert('Unable to update correspondence: '+err.message)}
+}
+</script>
+<style>
+.bc-workflow-box{margin-top:24px;padding:20px;border:1px solid #dce5f0;border-radius:14px;background:#fff}
+.bc-workflow-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bc-workflow-title h3{margin:0}
+.bc-workflow-pill{font-size:12px;background:#eef3f9;color:#25466c;border-radius:20px;padding:5px 11px;font-weight:600}
+.bc-workflow-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:14px 0}
+.bc-workflow-form label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:190px;font-size:13px;font-weight:600}
+.bc-workflow-form select{padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:100%;background:white;color:#182b45}
+.bc-workflow-record{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-top:1px solid #e2e8f0}
+.bc-workflow-record>div:first-child{flex:1;min-width:180px}
+.bc-workflow-record .muted,.bc-workflow-event{font-size:12px;margin-top:5px}
+.bc-workflow-event{padding:8px 0;border-bottom:1px solid #eef2f6}
+.bc-workflow-box details{margin-top:14px}
+@media(max-width:540px){.bc-workflow-form button{width:100%}}
+</style>
 </body></html>
