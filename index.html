@@ -1562,7 +1562,7 @@ bcJobsPage=function(){
  const docOptions=eligibleDocs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
  const recentApproved=approvals.filter(a=>a.status==='Approved').sort((a,b)=>new Date(b.reviewed_at)-new Date(a.reviewed_at))[0];
  const approvalNotice=recentApproved?'<div style="padding:8px 12px;margin:8px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:7px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><span style="font-size:12px;margin-left:8px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
- const approvalHtml=approvalNotice+'<details class="bc-collapse-section"><summary><span>Document Approvals</span><span class="bc-collapse-meta">'+approvals.length+' request(s)</span></summary><div class="bc-collapse-content"><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ const approvalHtml='<details class="bc-collapse-section"><summary><span>Document Approvals</span><span class="bc-collapse-meta">'+approvals.length+' request(s)</span></summary><div class="bc-collapse-content"><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</div></details>';
  let emailsHtml='';
@@ -1584,6 +1584,20 @@ bcJobsPage=function(){
   emailsHtml='<div class="bc-workflow-form"><label>Find existing CRM correspondence<select id="bcJobEmailChoice">'+(options||'<option value="">No unlinked emails available</option>')+'</select></label><button class="btn" type="button" onclick="bcJobAttachSelectedEmail()" '+(!options?'disabled':'')+'>Link to Job</button><button class="btn secondary" type="button" onclick="bcJobLoadEmails()">Refresh</button></div>'+(linkedRows||'<p class="muted">No emails linked to this job yet.</p>')+'<p class="muted">Shows the latest 100 incoming and 100 outgoing emails. Emails already linked to other jobs are excluded.</p>';
  }
  const emailHtml='<details class="bc-collapse-section"><summary><span>Email Correspondence</span><span class="bc-collapse-meta">'+(bcDetailData.linkedEmails||[]).length+' linked</span></summary><div class="bc-collapse-content"><p class="muted">Link existing client emails to this job. Original messages remain in the CRM inbox and sent mail.</p>'+emailsHtml+'</div></details>';
+ /* Place the most recent actionable approval state immediately under the job heading. */
+ const latestDecision=approvals.filter(a=>['Approved','Changes Requested','Pending'].includes(a.status)).sort((a,b)=>new Date(b.reviewed_at||b.requested_at||0)-new Date(a.reviewed_at||a.requested_at||0))[0];
+ let topApproval='';
+ if(latestDecision){
+  const state=latestDecision.status;
+  const theme=state==='Approved'?['#effbf4','#a7dec3','#146c43']:state==='Changes Requested'?['#fff7e6','#f1cd86','#855600']:['#f3f6fa','#d8e1ed','#40526a'];
+  const label=state==='Approved'?'✓ Client Approved':state==='Changes Requested'?'Changes Requested':'Approval Pending';
+  const stamp=latestDecision.reviewed_at||latestDecision.requested_at;
+  topApproval='<div style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 11px;margin:8px 0 14px;border:1px solid '+theme[1]+';background:'+theme[0]+';color:'+theme[2]+';border-radius:7px;font-size:13px"><strong>'+label+'</strong><span>'+h(fileName(latestDecision.document_id))+'</span>'+(stamp?'<span>· '+h(new Date(stamp).toLocaleString())+'</span>':'')+'</div>';
+ }
+ if(topApproval){
+  const headerEnd=html.indexOf('</div>',html.indexOf('<h2>Job Details</h2>'));
+  if(headerEnd>=0)html=html.slice(0,headerEnd+6)+topApproval+html.slice(headerEnd+6);
+ }
  const insertAt=html.lastIndexOf('</section>');
  return insertAt>=0?html.slice(0,insertAt)+approvalHtml+emailHtml+html.slice(insertAt):html+approvalHtml+emailHtml;
 };
