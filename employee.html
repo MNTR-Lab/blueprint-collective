@@ -394,4 +394,55 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  setInterval(()=>{if(!document.hidden)update()},30000);
 })();
 </script>
+
+<style id="bc-production-view-css">
+.bc-production-view{margin-top:12px;padding:14px;border:1px solid #d9e4f0;border-radius:10px;background:#f8fbff}
+.bc-production-view-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.bc-production-view-info{font-size:13px;color:#52657b;line-height:1.6}
+</style>
+<script id="bc-production-view-navigation">
+(function(){
+ const escapeText=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function viewAssignedJob(jobId){
+  if(!jobId){alert('This assignment has no linked job. Please contact your administrator.');return;}
+  const jobsSection=document.getElementById('employee-jobs');
+  jobsSection?.classList.add('is-open');
+  jobsSection?.querySelector('.employee-fold-body')?.removeAttribute('hidden');
+  jobsSection?.querySelector('.employee-fold-toggle')?.setAttribute('aria-expanded','true');
+  await openJob(jobId);
+  document.getElementById('jobdetails')?.scrollIntoView({behavior:'smooth',block:'start'});
+ }
+ window.bcViewAssignedJob=viewAssignedJob;
+ async function enhanceNotifications(){
+  const box=document.getElementById('notificationlist');if(!box)return;
+  let notifications;
+  try{notifications=(await call('notifications_list')).items||[]}catch(e){return}
+  const displayed=[...box.querySelectorAll('#bcActiveNotifications > div, #bcArchivedNotifications > div > div')];
+  for(const [index,n] of [...notifications.filter(x=>!x.read_at),...notifications.filter(x=>!!x.read_at)].entries()){
+   const row=displayed[index];if(!row||!n.job_id||row.querySelector('[data-view-assignment]'))continue;
+   const button=document.createElement('button');button.type='button';button.className='secondary';
+   button.dataset.viewAssignment=String(n.job_id);button.textContent='View Job';button.style.marginRight='8px';
+   button.onclick=()=>viewAssignedJob(n.job_id);row.appendChild(button);
+  }
+ }
+ const previousRefresh=refreshEmployeeNotifications;
+ refreshEmployeeNotifications=async function(){const result=await previousRefresh();await enhanceNotifications();return result};
+ async function enhanceAssignments(){
+  const root=document.getElementById('jobcards');if(!root)return;
+  // Job cards are already scoped to jobs the authenticated employee may access.
+  for(const b of root.querySelectorAll('button[data-job]')){
+   if(b.parentElement.querySelector('[data-production-view]'))continue;
+   const helper=document.createElement('div');helper.className='bc-production-view';helper.dataset.productionView='true';
+   helper.innerHTML='<div class="bc-production-view-info">Open this job to review its tasks, documents, and activity before updating your production work.</div>';
+   const action=document.createElement('button');action.type='button';action.className='secondary';action.textContent='View Assignment Details';
+   action.style.marginTop='9px';action.onclick=()=>viewAssignedJob(b.dataset.job);
+   helper.appendChild(action);b.parentElement.appendChild(helper);
+  }
+ }
+ const originalLoadJobs=loadJobs;
+ loadJobs=async function(){const r=await originalLoadJobs();await enhanceAssignments();return r};
+ const root=document.getElementById('jobcards');
+ if(root)new MutationObserver(()=>{queueMicrotask(enhanceAssignments)}).observe(root,{childList:true});
+})();
+</script>
 </body></html>
