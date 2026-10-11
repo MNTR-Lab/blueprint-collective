@@ -2210,4 +2210,28 @@ bcInboxDetail=function(m){
 const bcMailJobPreviousLoad=bcLoadInbox;
 bcLoadInbox=async function(){await bcMailJobPreviousLoad();await bcMailLoadJobLinks()};
 </script>
+
+<script>
+/* Ensure job choices load from the backend when Email Center opens. */
+let bcMailJobsLoading=false,bcMailJobsError='';
+async function bcMailEnsureJobs(){
+ if(bcMailJobsLoading)return;
+ bcMailJobsLoading=true;bcMailJobsError='';
+ try{
+  const result=await bcJobsRequest({action:'list'});
+  bcCoreJobs=result.jobs||[];
+  bcJobsLoaded=true;
+ }catch(e){bcMailJobsError=e.message||String(e)}
+ finally{bcMailJobsLoading=false;if(page==='email')render()}
+}
+const bcMailPriorInboxLoad=bcLoadInbox;
+bcLoadInbox=async function(){await Promise.all([bcMailPriorInboxLoad(),bcMailEnsureJobs()])};
+const bcMailPriorDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ const html=bcMailPriorDetail(m);
+ if(!m)return html;
+ const notice=bcMailJobsLoading?'Loading available jobs…':bcMailJobsError?'Unable to load jobs: '+bcInboxEscape(bcMailJobsError):!bcCoreJobs.length?'No jobs available. Check Jobs & Projects.':'';
+ return html+(notice?'<p class="muted" style="margin-top:10px">'+notice+'</p>':'');
+};
+</script>
 </body></html>
