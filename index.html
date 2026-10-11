@@ -1345,7 +1345,7 @@ bcJobsPage=function(){
  (bcDetailData.notes.length?bcDetailData.notes.map(n=>'<div style="padding:12px;border-bottom:1px solid #ddd"><small>'+h(new Date(n.created_at).toLocaleString())+'</small><p style="white-space:pre-wrap">'+h(n.body)+'</p></div>').join(''):'<p class="muted">No notes yet.</p>')+'</div>'+
  '<details class="bc-collapse-section"><summary><span>Job Documents</span><span class="bc-collapse-meta">'+bcDetailData.documents.length+' file(s)</span></summary><div class="bc-collapse-content"><div class="bc-documents"><p class="muted">Keep quotes, proofs, invoices, and approvals organized with this job.</p><form class="bc-upload-form" onsubmit="bcDetailUpload(event)"><div class="bc-upload-top"><label for="bcDocumentCategory">Document Type</label><select id="bcDocumentCategory" name="category"><option>Quote</option><option>Proof</option><option>Invoice</option><option>Approval</option><option>Other</option></select></div><div class="bc-upload-drop" id="bcUploadDrop" ondragover="bcDetailDragOver(event)" ondragleave="bcDetailDragLeave(event)" ondrop="bcDetailDrop(event)"><input type="file" name="file" id="bcUploadFile" required onchange="bcDetailFileChanged(this)"><label for="bcUploadFile" class="bc-upload-pick"><span class="bc-upload-icon">↑</span><strong>Choose a file or drag it here</strong><span>PDFs, images and other documents · Up to 15 MB</span><span class="bc-upload-browse">Browse files</span></label></div><div id="bcUploadSelected" class="bc-upload-selected" aria-live="polite">No file selected</div><div class="bc-upload-actions"><span id="bcUploadProgress" class="muted" role="status">Files are stored securely with this job.</span><button class="btn" type="submit">Upload Document</button></div></form>'+
  (bcDetailData.documents.length?'<div class="tablewrap"><table><thead><tr><th>Document</th><th>Category</th><th>Added</th><th></th></tr></thead><tbody>'+bcDetailData.documents.map(d=>'<tr><td>'+h(d.filename)+'</td><td>'+h(d.category)+'</td><td>'+h(new Date(d.created_at).toLocaleDateString())+'</td><td><button class="btn secondary" onclick="bcDetailDownload(\''+h(d.id)+'\')">Download</button> <button class="btn secondary" onclick="bcDetailView(\''+h(d.id)+'\')">View</button></td></tr>').join('')+'</tbody></table></div>' :'<p class="muted">No documents yet.</p>')+'</div></div></details>'+
- '<p class="muted">Job correspondence and approval workflows will be connected in the next phase.</p></div>';
+ '<p class="muted"></div>';
  return base+'<section class="panel" style="margin-top:20px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><h2>Job Details</h2><p>'+h(j.job_number)+' · '+h(j.title)+' · '+h(j.client_name)+'</p></div><button class="btn secondary" onclick="bcDetailClose()">Close Details</button></div>'+details+'</section>';
 };
 const bcJobsRenderBeforeDetails=render;
@@ -1561,11 +1561,8 @@ bcJobsPage=function(){
  const eligibleDocs=docs.filter(d=>!approvals.some(a=>a.document_id===d.id));
  const docOptions=eligibleDocs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
  const recentApproved=approvals.filter(a=>a.status==='Approved').sort((a,b)=>new Date(b.reviewed_at)-new Date(a.reviewed_at))[0];
- const approvalNotice=recentApproved?'<div style="padding:12px 15px;margin:10px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:9px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><div style="font-size:12px;margin-top:4px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
- const currentJob=bcDetailData.job||{};
- const statusOptions=bcCoreJobStatuses.map(st=>'<option value="'+h(st)+'" '+(currentJob.status===st?'selected':'')+'>'+h(st)+'</option>').join('');
- const productionControls='<section class="bc-workflow-box" style="margin-bottom:14px"><div class="bc-workflow-title"><h3>Production Status</h3></div><p class="muted">Approval workflow updates the job status automatically when the CRM synchronizes. You may also change the status manually.</p><form onsubmit="bcJobUpdateProductionStatus(event)" style="display:flex;align-items:end;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:180px">Job Status<select name="status" style="width:100%;padding:10px">'+statusOptions+'</select></label><button type="submit" class="btn">Save Status</button></form></section>';
- const approvalHtml=productionControls+approvalNotice+'<details class="bc-collapse-section"><summary><span>Document Approvals</span><span class="bc-collapse-meta">'+approvals.length+' request(s)</span></summary><div class="bc-collapse-content"><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
+ const approvalNotice=recentApproved?'<div style="padding:8px 12px;margin:8px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:7px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><span style="font-size:12px;margin-left:8px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
+ const approvalHtml=approvalNotice+'<details class="bc-collapse-section"><summary><span>Document Approvals</span><span class="bc-collapse-meta">'+approvals.length+' request(s)</span></summary><div class="bc-collapse-content"><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</div></details>';
  let emailsHtml='';
@@ -2235,29 +2232,5 @@ bcInboxDetail=function(m){
 };
 </script>
 
-<script>
-/* Linked correspondence panel on the existing Job Details page. */
-let bcJobMailBusy=false,bcJobMailError='';
-async function bcJobMailRefresh(){
- bcJobMailBusy=true;bcJobMailError='';
- try{
-  const [links,inbox]=await Promise.all([bcMailJobRequest('jobLinks'),bcMailJobRequest('list') .catch(()=>null)]);
-  bcMailJobLinks=links.links||[];
-  if(inbox?.messages)bcInboxMessages=inbox.messages;
- }catch(e){bcJobMailError=e.message||String(e)}
- finally{bcJobMailBusy=false;if(page==='jobs')render()}
-}
-const bcJobMailPriorOpen=bcDetailOpen;
-bcDetailOpen=async function(id){await bcJobMailPriorOpen(id);await bcJobMailRefresh()};
-const bcJobMailPriorPage=bcJobsPage;
-bcJobsPage=function(){
- const html=bcJobMailPriorPage();
- if(!bcDetailJobId)return html;
- const matches=bcMailJobLinks.filter(l=>String(l.job_id)===String(bcDetailJobId));
- const messages=matches.map(l=>bcInboxMessages.find(m=>String(m.id)===String(l.email_id))).filter(Boolean);
- const rows=messages.map(m=>'<div style="padding:12px 0;border-bottom:1px solid #e5ebf1"><strong>'+bcInboxEscape(m.subject||'(No subject)')+'</strong><div class="muted">'+bcInboxEscape(m.sender)+' · '+bcInboxEscape(new Date(m.received_at).toLocaleString())+'</div><details><summary style="cursor:pointer;margin-top:6px">Read message</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+bcInboxEscape(bcEmailBody(m))+'</p></details><button class="btn secondary" style="margin-top:8px" onclick="bcMailTab=\'inbox\';bcInboxSelected=\''+bcInboxEscape(m.id)+'\';navigate(\'email\')">Open in Email Center</button></div>').join('');
- const panel='<section class="panel" style="margin-top:16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h3>Linked Email Correspondence</h3><button class="btn secondary" onclick="bcJobMailRefresh()">Refresh</button></div>'+(bcJobMailBusy?'<p class="muted">Loading correspondence…</p>':'')+(bcJobMailError?'<p class="notice">'+bcInboxEscape(bcJobMailError)+'</p>':'')+(rows||'<p class="muted">No linked incoming emails for this job.</p>')+'</section>';
- return html+panel;
-};
-</script>
+
 </body></html>
