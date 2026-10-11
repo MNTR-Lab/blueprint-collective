@@ -108,6 +108,25 @@
 .bc-task-expand-field>small{color:#64748b}
 .bc-task-expand-actions{display:flex;gap:8px;flex-wrap:wrap}
 </style>
+<style>
+.bc-jobs-list-panel{margin-top:16px}
+.bc-jobs-card-list{display:grid;gap:10px;margin-top:14px}
+.bc-job-card{border:1px solid #dbe3ed;border-radius:11px;overflow:hidden;background:#fff}
+.bc-job-card-summary{list-style:none;display:flex;gap:14px;align-items:center;cursor:pointer;padding:17px}
+.bc-job-card-summary::-webkit-details-marker{display:none}
+.bc-job-card-identity{display:grid;gap:5px;flex:1;min-width:0}
+.bc-job-card-identity strong{font-size:15px;color:#162a44;overflow-wrap:anywhere}
+.bc-job-card-identity small{color:#63748c}
+.bc-job-card-state{border-radius:18px;background:#eaf0f7;color:#284967;font-weight:700;font-size:12px;padding:6px 10px}
+.bc-job-card-arrow{font-size:22px;color:#63748c}
+.bc-job-card[open] .bc-job-card-arrow{transform:rotate(180deg)}
+.bc-job-card-body{padding:17px;border-top:1px solid #e6ebf2;display:grid;gap:15px}
+.bc-job-card-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.bc-job-card-fields>div{display:grid;gap:5px}
+.bc-job-card-fields small{color:#63748c}
+.bc-job-card-description{white-space:pre-wrap;margin:0;color:#46566c}
+.bc-job-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+</style>
 </head><body><div class="shell"><aside class="side"><div class="brand brand-logo"><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="eager" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback" style="display:none">BLUEPRINT <small>COLLECTIVE</small></span></div><nav id="nav"></nav><div class="provider-footer"><span class="provider-label">PLATFORM POWERED BY</span><img src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="provider-fallback" style="display:none">Blueprint Collective</span></div></aside><div class="main"><header class="top"><h1 id="topTitle">Dashboard</h1><div style="display:flex;align-items:center;gap:12px"><select id="businessSelect" class="field" aria-label="Business selector"></select><span class="pill">Demo workspace</span></div></header><main class="content" id="view"></main></div></div><div class="modalbg" id="modalbg"><div class="modal" id="modal"></div></div><script>
 const K='blueprint-crm-v1-local';const sample={businesses:[{id:'blueprint',name:'Blueprint Collective',color:'#163b65'}],records:{leads:[{id:'l1',businessId:'blueprint',name:'Morgan Parker',company:'Summit Athletics',email:'morgan@example.com',status:'Qualified',value:5200,owner:'Admin'},{id:'l2',businessId:'blueprint',name:'Taylor Reed',company:'Northstar Media',email:'taylor@example.com',status:'New',value:1800,owner:'Admin'},{id:'l3',businessId:'blueprint',name:'Jordan Lee',company:'Peak Events',email:'jordan@example.com',status:'Contacted',value:3600,owner:'Admin'}],clients:[{id:'c1',businessId:'blueprint',name:'Evergreen Sports',email:'hello@example.com',status:'Active',owner:'Admin'},{id:'c2',businessId:'blueprint',name:'Harbor Creative',email:'contact@example.com',status:'Prospect',owner:'Admin'}],contacts:[{id:'ct1',businessId:'blueprint',name:'Alex Morgan',company:'Evergreen Sports',email:'alex@example.com',status:'Primary'}],deals:[{id:'d1',businessId:'blueprint',name:'Spring Campaign',company:'Evergreen Sports',value:12000,status:'Proposal Sent',owner:'Admin'},{id:'d2',businessId:'blueprint',name:'Brand Refresh',company:'Harbor Creative',value:7500,status:'Discovery',owner:'Admin'}],jobs:[{id:'j1',businessId:'blueprint',name:'Website Refresh',company:'Evergreen Sports',status:'In Progress',owner:'Admin'}],tasks:[{id:'t1',businessId:'blueprint',name:'Follow up on proposal',company:'Evergreen Sports',status:'Open',owner:'Admin'}]},connections:[]};
 let data;try{data=JSON.parse(localStorage.getItem(K))||structuredClone(sample)}catch{data=structuredClone(sample)};let page='dashboard',business='blueprint',search='',clientTab='active',settingsTab='businesses';const navs=[['dashboard','▦','Dashboard'],['team-directory','♙','Team Directory'],['email','✉','Email Inbox'],['client-management','▣','Clients'],['leads','◎','Leads'],['deals','◇','Opportunities'],['jobs','▤','Jobs & Projects'],['tasks','☷','Tasks & Activities'],['revenue','▥','Revenue Goals'],['settings','⚙','Settings'],['logout','⇥','Log Out']];const schemas={leads:{title:'Leads',fields:['name','company','email','status','value','owner'],statuses:['New','Contacted','Qualified','Unqualified','Converted']},clients:{title:'Companies & Clients',fields:['name','email','status','owner'],statuses:['Prospect','Active','Inactive','Archived']},contacts:{title:'Contacts',fields:['name','company','email','status'],statuses:['Primary','Secondary','Other']},deals:{title:'Opportunities',fields:['name','company','value','status','owner'],statuses:['Discovery','Quoting','Proposal Sent','Negotiation','Won','Lost']},jobs:{title:'Jobs & Projects',fields:['name','company','status','owner'],statuses:['Not Started','In Progress','On Hold','Completed']},tasks:{title:'Activities & Tasks',fields:['name','company','status','owner'],statuses:['Open','In Progress','Completed']}};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const save=()=>localStorage.setItem(K,JSON.stringify(data));const records=k=>data.records[k].filter(x=>x.businessId===business);const fmt=n=>'$'+Number(n||0).toLocaleString();const badge=s=>{let c=/active|won|qualified|completed/i.test(s)?'green':/new|progress|proposal|contacted/i.test(s)?'orange':/lost|unqualified/i.test(s)?'red':'gray';return `<span class="status ${c}">${esc(s)}</span>`};function render(){document.getElementById('nav').innerHTML=navs.map(([id,icon,label])=>`<button class="nav ${page===id?'active':''}" onclick="${id==='logout'?'bcLogout()':`navigate('${id}')`}"><span>${icon}</span>${label}${id==='email'&&bcMailHasNew?'<span class="bc-new-mail-dot" title="New email received" aria-label="New email received"></span>':''}${id==='jobs'&&bcJobsHasNew?'<span class="bc-new-mail-dot" title="New job or client approval activity" aria-label="New job activity"></span>':''}${id==='tasks'&&bcTasksHasNew?'<span class="bc-new-mail-dot" title="New task added" aria-label="New task"></span>':''}</button>`).join('');document.getElementById('topTitle').textContent=navs.find(n=>n[0]===page)[2];document.getElementById('businessSelect').innerHTML=data.businesses.map(b=>`<option value="${esc(b.id)}" ${business===b.id?'selected':''}>${esc(b.name)}</option>`).join('');document.getElementById('businessSelect').onchange=e=>{business=e.target.value;search='';render()};document.getElementById('view').innerHTML=page==='dashboard'?dashboard():page==='team-directory'?'<div class="heading"><div><h2>Team Directory</h2><p>Manage your team members and invitations.</p></div></div><section class="panel"><p>Select Team Directory to manage employees.</p></section>':page==='revenue'?bcRevenuePage():page==='client-management'?clientManagement():schemas[page]?listPage(page):page==='connections'?connections():page==='contacts'?listPage('contacts'):page==='clients'?clientManagement():settings();}function navigate(p){page=p;search='';if(p==='email')bcMailMarkSeen();if(p==='tasks')bcTasksMarkSeen();render();if(p==='team-directory')bcOpenTeamDirectory()}
@@ -1368,12 +1387,12 @@ function bcJobsPage(){
  '<label>Due Date<input name="dueDate" type="date" style="width:100%;padding:10px" value="'+esc(editing?.due_date||'')+'"></label>'+
  (editing?'<label>Status<select name="status" style="width:100%;padding:10px">'+statuses+'</select></label>':'<p class="muted">New jobs start with status: New</p>')+
  '<div><button class="btn" type="submit">'+(editing?'Save Job Changes':'Create Job')+'</button> <button class="btn secondary" type="button" onclick="bcJobCancel()">Cancel</button></div></form></section>':'';
- const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b>'+bcJobAttentionDot(j.id)+'</td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Blueprint Collective database synchronization status">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit</button>'+(bcJobsArchiveTab==='completed'?' <button class="btn secondary" onclick="bcJobsReopen(\''+esc(j.id)+'\')">Reopen</button>':'')+(j.sync_status!=='synced'?' <button class="btn secondary" onclick="bcJobsRetrySync(\''+esc(j.id)+'\')">Retry Sync</button>':'')+'</td></tr>').join('');
+ const rows=list.map(j=>'<details class="bc-job-card"><summary class="bc-job-card-summary"><span class="bc-job-card-identity"><strong>'+esc(j.title||'Untitled Job')+bcJobAttentionDot(j.id)+'</strong><small>'+esc(j.job_number||'Job')+' · '+esc(j.client_name||'No client')+'</small></span><span class="bc-job-card-state">'+esc(j.status||'New')+'</span><span class="bc-job-card-arrow">⌄</span></summary><div class="bc-job-card-body"><div class="bc-job-card-fields"><div><small>Job Number</small><strong>'+esc(j.job_number||'—')+'</strong></div><div><small>Client</small><strong>'+esc(j.client_name||'—')+'</strong></div><div><small>Due Date</small><strong>'+esc(j.due_date||'Not set')+'</strong></div><div><small>Database</small><strong>'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</strong></div></div>'+(j.description?'<p class="bc-job-card-description">'+esc(j.description)+'</p>':'')+'<div class="bc-job-card-actions"><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit Job</button>'+(bcJobsArchiveTab==='completed'?' <button class="btn secondary" onclick="bcJobsReopen(\''+esc(j.id)+'\')">Reopen</button>':'')+(j.sync_status!=='synced'?' <button class="btn secondary" onclick="bcJobsRetrySync(\''+esc(j.id)+'\')">Retry Sync</button>':'')+'</div></div></details>').join('');
  return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcCoreLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
  '<section class="panel"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn '+(bcJobsArchiveTab==='active'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'active\')">Active Jobs ('+bcCoreJobs.filter(j=>!['Completed','Closed'].includes(j.status)).length+')</button><button class="btn '+(bcJobsArchiveTab==='completed'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'completed\')">Completed / Archived ('+bcCoreJobs.filter(j=>['Completed','Closed'].includes(j.status)).length+')</button></div><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
  '<p class="muted">'+list.length+' job(s)'+(client?' for '+esc(client.name):'')+' · Jobs are managed in Blueprint Collective.</p></section>'+
  (bcJobsError?'<div class="alert">'+esc(bcJobsError)+'</div>':'')+form+
- '<section class="panel"><div class="tablewrap"><table><thead><tr><th>Job #</th><th>Job</th><th>Client</th><th>Status</th><th>Due</th><th>Database Status</th><th></th></tr></thead><tbody>'+(bcJobsBusy?'<tr><td colspan="7">Loading jobs…</td></tr>':rows||'<tr><td colspan="7">No jobs yet. Select New Job to create the first one.</td></tr>')+'</tbody></table></div></section>';
+ '<section class="panel bc-jobs-list-panel"><h3>'+(bcJobsArchiveTab==='completed'?'Completed & Archived Jobs':'Active Jobs')+'</h3><div class="bc-jobs-card-list">'+(bcJobsBusy?'<p class="muted">Loading jobs…</p>':rows||'<p class="muted">No jobs match this view. Select + New Job to create one.</p>')+'</div></section>';
 }
 const bcRenderBeforeJobs=render;
 render=function(){bcRenderBeforeJobs();if(page==='jobs'){const view=document.getElementById('view');if(view)view.innerHTML=bcSession?bcJobsPage():'<section class="panel"><h2>Jobs & Projects</h2><p>Connecting to your selected Blueprint Collective workspace…</p></section>';}};
@@ -2966,4 +2985,102 @@ function bcExpandTaskTables(){
 const bcTaskDropdownRender=render;
 render=function(){bcTaskDropdownRender();bcExpandTaskTables();};
 </script>
+
+<script>
+/* Blueprint Collective core-job tasks (bc_jobs, not legacy sales_jobs). */
+let bcCoreJobTasks=[],bcCoreTasksBusy=false,bcCoreTasksLoaded=false;
+async function bcCoreTaskRefresh(){
+ if(!bcSession?.access_token||bcCoreTasksBusy)return;
+ bcCoreTasksBusy=true;
+ try{const result=await bcJobsRequest({action:'taskList'});bcCoreJobTasks=result.tasks||[];bcCoreTasksLoaded=true;}
+ catch(e){console.error('Core job task refresh failed',e);}
+ finally{bcCoreTasksBusy=false;render();}
+}
+function bcCoreTaskStaffName(id){return bcStaff.find(x=>String(x.id)===String(id))?.display_name||'Unassigned'}
+function bcCoreTaskRow(t){
+ const pending=t.status!=='Completed',job=bcCoreJobs.find(j=>String(j.id)===String(t.job_id));
+ return '<details class="bc-task-expand-item"><summary><span class="bc-task-expand-heading"><strong>'+
+ (pending?'<span class="bc-new-mail-dot" style="display:inline-block;position:static;margin-right:8px"></span>':'')+
+ esc(t.title)+'</strong><small>'+esc(job?.job_number||'Job')+' · '+esc(job?.title||'')+'</small></span>'+
+ '<span class="bc-task-expand-status">'+esc(t.status)+'</span><span class="bc-task-expand-arrow">⌄</span></summary>'+
+ '<div class="bc-task-expand-body"><div class="bc-task-expand-fields">'+
+ '<div class="bc-task-expand-field"><small>Assigned To</small><strong>'+esc(bcCoreTaskStaffName(t.assigned_staff_id))+'</strong></div>'+
+ '<div class="bc-task-expand-field"><small>Due Date</small><strong>'+esc(t.due_date||'Not set')+'</strong></div>'+
+ '<div class="bc-task-expand-field"><small>Priority</small><strong>'+esc(t.priority)+'</strong></div>'+
+ '<div class="bc-task-expand-field"><small>Status</small><select class="field" onchange="bcCoreTaskStatus('+JSON.stringify(t.id).replace(/"/g,'&quot;')+',this.value)">'+
+ ['To Do','In Progress','Completed'].map(st=>'<option '+(t.status===st?'selected':'')+'>'+st+'</option>').join('')+'</select></div></div>'+
+ (t.description?'<p>'+esc(t.description)+'</p>':'')+
+ '<div class="bc-task-expand-actions"><button class="btn secondary" onclick="page=\'jobs\';bcDetailOpen('+JSON.stringify(t.job_id).replace(/"/g,'&quot;')+')">Open Job</button></div></div></details>';
+}
+async function bcCoreTaskStatus(id,status){
+ try{await bcJobsRequest({action:'taskStatus',taskId:id,status});await bcCoreTaskRefresh();}
+ catch(e){alert('Unable to update task: '+e.message);render();}
+}
+function bcCoreTaskNew(jobId){
+ const job=bcCoreJobs.find(j=>String(j.id)===String(jobId));if(!job)return alert('Job not found.');
+ bcJobModal('<h3>Add Task</h3><p class="notice">'+esc(job.job_number)+' · '+esc(job.title)+'</p>'+
+ '<form id="bcJobForm" class="bc-staff-form">'+
+ '<label>Task Name<input name="title" required maxlength="200"></label>'+
+ '<label>Description<textarea name="description" rows="3" maxlength="3000"></textarea></label>'+
+ '<label>Assign Employee<select name="staffId"><option value="">Unassigned</option>'+
+ bcStaff.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join('')+'</select></label>'+
+ '<label>Due Date<input name="dueDate" type="date"></label>'+
+ '<label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Urgent</option></select></label>'+
+ '<p id="bcJobMsg" class="notice"></p><div class="actions"><button type="button" class="btn secondary" onclick="closeModal()">Cancel</button><button class="btn" type="submit">Save Task</button></div></form>',async form=>{
+ const fd=new FormData(form);
+ await bcJobsRequest({action:'taskCreate',jobId,title:fd.get('title'),description:fd.get('description'),staffId:fd.get('staffId')||null,dueDate:fd.get('dueDate')||null,priority:fd.get('priority')});
+ await bcCoreTaskRefresh();
+ });
+}
+function bcCoreTaskEnhance(){
+ if(page==='jobs'&&bcDetailJobId){
+  const headings=[...document.querySelectorAll('#view h2')];
+  const title=headings.find(h=>h.textContent.trim()==='Job Details');
+  if(title){
+   const bar=title.parentElement;
+   if(bar&&!bar.querySelector('.bc-core-add-task')){
+    const button=document.createElement('button');button.className='btn bc-core-add-task';button.textContent='+ Add Task';
+    button.onclick=()=>bcCoreTaskNew(bcDetailJobId);
+    bar.appendChild(button);
+   }
+   const section=title.closest('section.panel');
+   if(section&&!section.querySelector('.bc-core-job-tasks')){
+    const tasks=bcCoreJobTasks.filter(t=>String(t.job_id)===String(bcDetailJobId));
+    const block=document.createElement('details');block.className='bc-core-job-tasks';block.open=tasks.some(t=>t.status!=='Completed');
+    block.innerHTML='<summary><strong>Job Tasks</strong><span>'+tasks.length+' task(s)</span></summary><div class="bc-task-expand-list">'+
+    (tasks.map(bcCoreTaskRow).join('')||'<p class="muted">No tasks added to this job yet.</p>')+'</div>';
+    const notes=[...section.querySelectorAll('h3')].find(h=>h.textContent.trim()==='Job Notes');
+    if(notes){const noteSection=notes.closest('section');if(noteSection)noteSection.after(block);else section.appendChild(block);}
+    else section.appendChild(block);
+   }
+  }
+ }
+ if(page==='tasks'){
+  const view=document.getElementById('view');
+  if(view&&!view.querySelector('.bc-core-all-tasks')){
+   const block=document.createElement('section');block.className='panel bc-core-all-tasks';
+   const outstanding=bcCoreJobTasks.filter(t=>t.status!=='Completed').length;
+   block.innerHTML='<div class="bc-task-toolbar"><div><h3>Job Tasks</h3><p class="notice">'+outstanding+' outstanding · '+bcCoreJobTasks.length+' total</p></div></div>'+
+   '<div class="bc-task-expand-list">'+(bcCoreJobTasks.map(bcCoreTaskRow).join('')||'<p class="muted">No job tasks yet.</p>')+'</div>';
+   const metric=view.querySelector('.bc-task-metrics');if(metric)metric.after(block);else view.prepend(block);
+  }
+ }
+ const taskButton=document.querySelector('#nav button');
+ // Preserve existing notification behavior while including new core-job tasks.
+ const pending=bcCoreJobTasks.some(t=>t.status!=='Completed');
+ if(pending&&page!=='tasks')bcOriginalSidebarDot('tasks',true);
+}
+const bcCoreTaskPriorRender=render;
+render=function(){bcCoreTaskPriorRender();bcCoreTaskEnhance();};
+const bcCoreTaskPriorNavigate=navigate;
+navigate=function(p){bcCoreTaskPriorNavigate(p);if((p==='jobs'||p==='tasks')&&bcSession)bcCoreTaskRefresh();};
+if(bcSession?.access_token)bcCoreTaskRefresh();
+</script>
+<style>
+.bc-core-job-tasks{border:1px solid #d9e3ee;border-radius:11px;margin:18px 0;background:#fff}
+.bc-core-job-tasks>summary{display:flex;justify-content:space-between;cursor:pointer;padding:17px;list-style:none}
+.bc-core-job-tasks>summary::-webkit-details-marker{display:none}
+.bc-core-job-tasks>summary span{font-size:12px;color:#64748b}
+.bc-core-all-tasks{margin:14px 0}
+</style>
 </body></html>
