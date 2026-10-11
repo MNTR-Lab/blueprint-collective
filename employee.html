@@ -105,13 +105,29 @@ async function refreshEmployeeNotifications(){
         const refs=[...content.matchAll(/\bBC-[A-Z0-9]+\b/gi)].map(m=>m[0].toUpperCase());
         const matches=allowed.filter(j=>refs.some(ref=>[j.job_number,j.job_code,j.title,j.name].some(v=>String(v||'').toUpperCase().includes(ref))));
         if(matches.length===1)job=matches[0];
+        if(!job&&allowed.length===1)job=allowed[0];
       }
       const section=document.getElementById('employee-jobs');
       section?.classList.add('is-open');
       section?.querySelector('.employee-fold-body')?.removeAttribute('hidden');
       section?.querySelector('.employee-fold-toggle')?.setAttribute('aria-expanded','true');
       if(job){await openJob(job.id);document.getElementById('jobdetails')?.scrollIntoView({behavior:'smooth',block:'start'});}
-      else{await loadJobs();section?.scrollIntoView({behavior:'smooth',block:'start'});alert('The notification does not identify a unique assigned job. Select your job from My Jobs & Projects.');}
+      else{
+        await loadJobs();
+        const previous=b.parentElement.querySelector('[data-job-chooser]');if(previous)previous.remove();
+        const chooser=document.createElement('div');chooser.dataset.jobChooser='true';
+        chooser.style.cssText='margin-top:10px;padding:12px;border:1px solid #dce4ed;border-radius:8px;background:#f8fbff';
+        const heading=document.createElement('div');heading.textContent='Select the assigned job to view:';heading.style.marginBottom='8px';chooser.appendChild(heading);
+        if(!allowed.length){heading.textContent='No accessible jobs were returned. Open My Jobs to check your assignments.';}
+        allowed.forEach(j=>{
+          const btn=document.createElement('button');btn.type='button';btn.className='secondary';btn.style.cssText='margin:3px 6px 3px 0';
+          btn.textContent=String(j.title||j.job_number||j.job_code||'Job')+(j.client_name?' — '+j.client_name:'');
+          btn.onclick=async()=>{btn.disabled=true;try{await openJob(j.id);document.getElementById('jobdetails')?.scrollIntoView({behavior:'smooth',block:'start'});}finally{btn.disabled=false}};
+          chooser.appendChild(btn);
+        });
+        b.parentElement.appendChild(chooser);
+        chooser.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }
     }catch(e){alert('Unable to open assigned job: '+e.message)}finally{b.disabled=false}
   });
   box.querySelectorAll('[data-notification]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await call('notification_read',{id:b.dataset.notification});await refreshEmployeeNotifications();if(window.bcUpdateUnreadIndicators)window.bcUpdateUnreadIndicators()}catch(e){alert(e.message);b.disabled=false}});
