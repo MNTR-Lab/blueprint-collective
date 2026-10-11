@@ -1856,7 +1856,7 @@ function bcFulfillmentPanel(job){
  '<div><label>Tracking URL (optional)</label><input id="bcFulfillUrl" type="url" placeholder="https://…" value="'+e(f.tracking_url||'')+'"></div>'+
  '<div><label>Customer email</label><input id="bcFulfillEmail" type="email" placeholder="client@example.com" value="'+e(f.recipient_email||'')+'"></div></div>'+
  '<p class="muted" style="margin-top:12px">Client notification: <b>'+e(f.notification_status||'Not Sent')+'</b></p>'+
- '<button class="btn" onclick="bcFulfillmentSave(\\''+e(job.id)+'\\')">Save Fulfillment</button></section>';
+ '<button class="btn" onclick="bcFulfillmentSave(&quot;'+e(job.id)+'&quot;)">Save Fulfillment</button></section>';
 }
 window.bcFulfillmentSave=async jobId=>{
  const v=id=>document.getElementById(id)?.value||'';
