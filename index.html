@@ -1387,7 +1387,7 @@ function bcJobsPage(){
  '<label>Due Date<input name="dueDate" type="date" style="width:100%;padding:10px" value="'+esc(editing?.due_date||'')+'"></label>'+
  (editing?'<label>Status<select name="status" style="width:100%;padding:10px">'+statuses+'</select></label>':'<p class="muted">New jobs start with status: New</p>')+
  '<div><button class="btn" type="submit">'+(editing?'Save Job Changes':'Create Job')+'</button> <button class="btn secondary" type="button" onclick="bcJobCancel()">Cancel</button></div></form></section>':'';
- const rows=list.map(j=>'<details class="bc-job-card"><summary class="bc-job-card-summary"><span class="bc-job-card-identity"><strong>'+esc(j.title||'Untitled Job')+bcJobAttentionDot(j.id)+'</strong><small>'+esc(j.job_number||'Job')+' · '+esc(j.client_name||'No client')+'</small></span><span class="bc-job-card-state">'+esc(j.status||'New')+'</span><span class="bc-job-card-arrow">⌄</span></summary><div class="bc-job-card-body"><div class="bc-job-card-fields"><div><small>Job Number</small><strong>'+esc(j.job_number||'—')+'</strong></div><div><small>Client</small><strong>'+esc(j.client_name||'—')+'</strong></div><div><small>Due Date</small><strong>'+esc(j.due_date||'Not set')+'</strong></div><div><small>Database</small><strong>'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</strong></div></div>'+(j.description?'<p class="bc-job-card-description">'+esc(j.description)+'</p>':'')+'<div class="bc-job-card-actions"><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit Job</button> <button class="btn" onclick="bcCoreTaskNew(\''+esc(j.id)+'\')">+ Add Task</button>'+(bcJobsArchiveTab==='completed'?' <button class="btn secondary" onclick="bcJobsReopen(\''+esc(j.id)+'\')">Reopen</button>':'')+(j.sync_status!=='synced'?' <button class="btn secondary" onclick="bcJobsRetrySync(\''+esc(j.id)+'\')">Retry Sync</button>':'')+'</div></div></details>').join('');
+ const rows=list.map(j=>'<details class="bc-job-card"><summary class="bc-job-card-summary"><span class="bc-job-card-identity"><strong>'+esc(j.title||'Untitled Job')+bcJobAttentionDot(j.id)+'</strong><small>'+esc(j.job_number||'Job')+' · '+esc(j.client_name||'No client')+'</small></span><span class="bc-job-card-state">'+esc(j.status||'New')+'</span><span class="bc-job-card-arrow">⌄</span></summary><div class="bc-job-card-body"><div class="bc-job-card-fields"><div><small>Job Number</small><strong>'+esc(j.job_number||'—')+'</strong></div><div><small>Client</small><strong>'+esc(j.client_name||'—')+'</strong></div><div><small>Due Date</small><strong>'+esc(j.due_date||'Not set')+'</strong></div><div><small>Database</small><strong>'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</strong></div></div>'+(j.description?'<p class="bc-job-card-description">'+esc(j.description)+'</p>':'')+'<div class="bc-job-card-actions"><button class="btn secondary" onclick="bcOpenCoreJobDetails(\''+esc(j.id)+'\')">Job Details</button> <button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit Job</button> <button class="btn" onclick="bcCoreTaskNew(\''+esc(j.id)+'\')">+ Add Task</button>'+(bcJobsArchiveTab==='completed'?' <button class="btn secondary" onclick="bcJobsReopen(\''+esc(j.id)+'\')">Reopen</button>':'')+(j.sync_status!=='synced'?' <button class="btn secondary" onclick="bcJobsRetrySync(\''+esc(j.id)+'\')">Retry Sync</button>':'')+'</div>'+bcCoreJobInlineTasks(j.id)+'</div></details>').join('');
  return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcCoreLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
  '<section class="panel"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn '+(bcJobsArchiveTab==='active'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'active\')">Active Jobs ('+bcCoreJobs.filter(j=>!['Completed','Closed'].includes(j.status)).length+')</button><button class="btn '+(bcJobsArchiveTab==='completed'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'completed\')">Completed / Archived ('+bcCoreJobs.filter(j=>['Completed','Closed'].includes(j.status)).length+')</button></div><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
  '<p class="muted">'+list.length+' job(s)'+(client?' for '+esc(client.name):'')+' · Jobs are managed in Blueprint Collective.</p></section>'+
@@ -3083,5 +3083,30 @@ if(bcSession?.access_token)bcCoreTaskRefresh();
 .bc-core-job-tasks>summary::-webkit-details-marker{display:none}
 .bc-core-job-tasks>summary span{font-size:12px;color:#64748b}
 .bc-core-all-tasks{margin:14px 0}
+</style>
+
+<script>
+/* Job cards: direct access to full details and the job's linked tasks. */
+async function bcOpenCoreJobDetails(id){
+ await bcDetailOpen(id);
+ const title=[...document.querySelectorAll('#view h2')].find(e=>e.textContent.trim()==='Job Details');
+ if(title)title.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function bcCoreJobInlineTasks(id){
+ const tasks=bcCoreJobTasks.filter(t=>String(t.job_id)===String(id));
+ const outstanding=tasks.filter(t=>t.status!=='Completed').length;
+ return '<details class="bc-job-inline-tasks"><summary><strong>Job Tasks</strong><span>'+outstanding+' outstanding · '+tasks.length+' total</span><span class="bc-job-inline-chevron">⌄</span></summary>'+
+ '<div class="bc-task-expand-list">'+(tasks.map(bcCoreTaskRow).join('')||'<p class="muted">No tasks added to this job yet.</p>')+'</div></details>';
+}
+</script>
+<style>
+.bc-job-inline-tasks{margin-top:12px;border:1px solid #dbe3ed;border-radius:10px;background:#f9fbfe;overflow:hidden}
+.bc-job-inline-tasks>summary{list-style:none;cursor:pointer;padding:14px 15px;display:flex;align-items:center;gap:12px}
+.bc-job-inline-tasks>summary::-webkit-details-marker{display:none}
+.bc-job-inline-tasks>summary strong{color:#162a44}
+.bc-job-inline-tasks>summary span:nth-child(2){font-size:12px;color:#64748b}
+.bc-job-inline-chevron{margin-left:auto;color:#64748b;font-size:20px}
+.bc-job-inline-tasks[open] .bc-job-inline-chevron{transform:rotate(180deg)}
+.bc-job-inline-tasks .bc-task-expand-list{padding:0 12px 12px}
 </style>
 </body></html>
