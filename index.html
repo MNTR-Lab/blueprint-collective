@@ -1282,9 +1282,20 @@ async function bcJobSubmit(e){
  else{if(!client){alert('Choose a client first.');if(submit)submit.disabled=false;return;}payload.clientId=String(client.id);payload.clientName=client.name;}
  try{await bcJobsRequest(payload);bcJobFormOpen=false;bcJobEditing='';await bcCoreLoadJobs();}catch(err){alert(err.message||'Unable to save job');if(submit)submit.disabled=false;}
 }
+let bcJobsArchiveTab='active';
+window.bcJobsSwitchTab=tab=>{bcJobsArchiveTab=tab;bcDetailJobId='';bcJobFormOpen=false;render()};
+window.bcJobsReopen=async id=>{
+ if(!confirm('Reopen this completed job and return it to In Production? Its artwork, production, shipping and approval history will be preserved.'))return;
+ try{
+  await bcJobsRequest({action:'reopenCompletedJob',id});
+  bcJobsArchiveTab='active';bcDetailJobId='';
+  await bcCoreLoadJobs();
+  render();
+ }catch(err){alert('Unable to reopen job: '+String(err.message||err))}
+};
 function bcJobsPage(){
  const client=bcClients.find(c=>String(c.id)===bcJobClientFilter);
- const list=bcCoreJobs.filter(j=>!bcJobClientFilter||String(j.client_external_id)===bcJobClientFilter);
+ const list=bcCoreJobs.filter(j=>(!bcJobClientFilter||String(j.client_external_id)===bcJobClientFilter)&&(bcJobsArchiveTab==='completed'?['Completed','Closed'].includes(j.status):!['Completed','Closed'].includes(j.status)));
  const editing=bcCoreJobs.find(j=>j.id===bcJobEditing);
  const opt=bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===String(editing?.client_external_id||bcJobClientFilter)?'selected':'')+'>'+esc(c.name)+'</option>').join('');
  const statuses=bcCoreJobStatuses.map(st=>'<option value="'+esc(st)+'" '+(editing?.status===st?'selected':'')+'>'+esc(st)+'</option>').join('');
@@ -1297,7 +1308,7 @@ function bcJobsPage(){
  '<div><button class="btn" type="submit">'+(editing?'Save Job Changes':'Create Job')+'</button> <button class="btn secondary" type="button" onclick="bcJobCancel()">Cancel</button></div></form></section>':'';
  const rows=list.map(j=>'<tr><td><b>'+esc(j.job_number)+'</b>'+bcJobAttentionDot(j.id)+'</td><td>'+esc(j.title)+'</td><td>'+esc(j.client_name)+'</td><td>'+esc(j.status)+'</td><td>'+esc(j.due_date||'—')+'</td><td><span title="Blueprint Collective database synchronization status">'+(j.sync_status==='synced'?'Synced':'Awaiting Sync')+'</span></td><td><button class="btn secondary" onclick="bcCoreJobEdit(\''+esc(j.id)+'\')">Edit</button></td></tr>').join('');
  return '<div class="heading"><div><h2>Jobs & Projects</h2><p>Manage client work directly in Blueprint Collective.</p></div><div><button class="btn secondary" onclick="bcCoreLoadJobs()">Refresh</button> <button class="btn" onclick="bcJobNew()">+ New Job</button></div></div>'+
- '<section class="panel"><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
+ '<section class="panel"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn '+(bcJobsArchiveTab==='active'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'active\')">Active Jobs ('+bcCoreJobs.filter(j=>!['Completed','Closed'].includes(j.status)).length+')</button><button class="btn '+(bcJobsArchiveTab==='completed'?'':'secondary')+'" onclick="bcJobsSwitchTab(\'completed\')">Completed / Archived ('+bcCoreJobs.filter(j=>['Completed','Closed'].includes(j.status)).length+')</button></div><label>Filter by client <select style="padding:8px;margin-left:8px" onchange="bcJobClientFilter=this.value;bcJobFormOpen=false;render()"><option value="">All Clients</option>'+bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===bcJobClientFilter?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+
  '<p class="muted">'+list.length+' job(s)'+(client?' for '+esc(client.name):'')+' · Jobs are managed in Blueprint Collective.</p></section>'+
  (bcJobsError?'<div class="alert">'+esc(bcJobsError)+'</div>':'')+form+
  '<section class="panel"><div class="tablewrap"><table><thead><tr><th>Job #</th><th>Job</th><th>Client</th><th>Status</th><th>Due</th><th>Database Status</th><th></th></tr></thead><tbody>'+(bcJobsBusy?'<tr><td colspan="7">Loading jobs…</td></tr>':rows||'<tr><td colspan="7">No jobs yet. Select New Job to create the first one.</td></tr>')+'</tbody></table></div></section>';
