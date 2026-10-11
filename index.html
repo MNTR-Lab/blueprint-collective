@@ -2188,7 +2188,7 @@ bcInboxLayout=function(){
  if(bcMailTab==='compose')return top+'<section class="panel">'+tabs+notice+bcOutgoingComposeLayout()+'</section>';
  const messages=bcInboxVisibleMessages().filter(m=>[m.sender,m.subject,bcEmailClientMatch(m)?.name].some(x=>String(x||'').toLowerCase().includes(bcMailSearch.toLowerCase())));
  const threads=bcMailBuildThreads(messages);
- const rows=threads.map(t=>'<button class="bc-mail-item '+(t.items.some(m=>m.id===bcInboxSelected)?'selected':'')+'" onclick="bcOpenInboxMessage(\\''+bcInboxEscape(t.latest.id)+'\\')"><strong>'+bcInboxEscape(t.latest.subject||'(No subject)')+(t.items.length>1?' <span style="font-size:12px;opacity:.7">('+t.items.length+')</span>':'')+'</strong><small>'+bcInboxEscape(t.latest.sender)+'</small><small>'+bcInboxEscape(bcEmailClientMatch(t.latest)?.name||'Unmatched client')+' · '+bcInboxEscape(new Date(t.latest.received_at).toLocaleString())+'</small></button>').join('');
+ const rows=threads.map(t=>'<button class="bc-mail-item '+(t.items.some(m=>m.id===bcInboxSelected)?'selected':'')+'" onclick="bcOpenInboxMessage(\''+bcInboxEscape(t.latest.id)+'\')"><strong>'+bcInboxEscape(t.latest.subject||'(No subject)')+(t.items.length>1?' <span style="font-size:12px;opacity:.7">('+t.items.length+')</span>':'')+'</strong><small>'+bcInboxEscape(t.latest.sender)+'</small><small>'+bcInboxEscape(bcEmailClientMatch(t.latest)?.name||'Unmatched client')+' · '+bcInboxEscape(new Date(t.latest.received_at).toLocaleString())+'</small></button>').join('');
  const selected=bcInboxMessages.find(m=>m.id===bcInboxSelected);
  return top+'<section class="panel">'+tabs+notice+bcInboxFilterNotice()+'<div class="bc-mail-bar"><input id="bcMailSearch" placeholder="Search sender, subject, client…" value="'+bcInboxEscape(bcMailSearch)+'" oninput="bcMailFilter(this.value)"><span class="muted">'+threads.length+' conversations · '+messages.length+' messages</span></div>'+(bcInboxBusy?'<p>Loading messages…</p>':'')+'<div class="bc-mail-layout"><div class="bc-mail-list">'+(rows||'<p style="padding:16px">No matching messages.</p>')+'</div><div class="bc-mail-reader">'+(selected?bcInboxDetail(selected):'<p class="muted">Select a conversation to read or reply.</p>')+'</div></div></section>';
 };
@@ -2280,5 +2280,35 @@ bcInboxDetail=function(m){
  const history=items.map((x,i)=>'<details '+(x.id===m.id?'open':'')+' style="border-bottom:1px solid #e3e9f0;padding:10px 0"><summary style="cursor:pointer"><strong>'+bcInboxEscape(x.sender)+'</strong> <span class="muted">'+bcInboxEscape(new Date(x.received_at).toLocaleString())+'</span></summary><p style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto">'+bcInboxEscape(bcEmailBody(x))+'</p></details>').join('');
  return '<div style="margin-bottom:12px"><strong>'+items.length+' messages in this conversation</strong><p class="muted">Incoming messages grouped by sender and subject.</p>'+history+'</div>'+bcMailPreviousDetail(m);
 };
+</script>
+
+<script>
+/* Unified incoming/outgoing timeline inside the existing conversation reader. */
+function bcMailSentForIncoming(m){
+ const subject=bcMailThreadSubject(m.subject);
+ const address=bcClientEmailAddress(m.sender||'').toLowerCase();
+ return bcSentMessages.filter(x=>bcMailThreadSubject(x.subject)===subject &&
+   bcClientEmailAddress(x.recipient||'').toLowerCase()===address);
+}
+function bcMailUnifiedTimeline(m){
+ const key=bcMailThreadKey(m);
+ const incoming=bcInboxMessages.filter(x=>bcMailThreadKey(x)===key)
+   .map(x=>({kind:'incoming',date:x.received_at,id:x.id,from:x.sender,to:x.recipient,body:bcEmailBody(x)}));
+ const outgoing=bcMailSentForIncoming(m)
+   .map(x=>({kind:'sent',date:x.created_at,id:x.id,from:x.sender,to:x.recipient,body:x.body_text||''}));
+ return [...incoming,...outgoing].sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+const bcMailUnifiedOldDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ if(!m)return bcMailUnifiedOldDetail(m);
+ const timeline=bcMailUnifiedTimeline(m);
+ const cards=timeline.map(x=>'<div style="border-bottom:1px solid #e3e9f0;padding:12px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong>'+(x.kind==='sent'?'↗ Sent':'↙ Received')+'</strong><span class="muted">'+bcInboxEscape(new Date(x.date).toLocaleString())+'</span></div><div style="font-size:12px;margin-top:5px"><b>From:</b> '+bcInboxEscape(x.from)+'<br><b>To:</b> '+bcInboxEscape(x.to)+'</div><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+bcInboxEscape(x.body)+'</p></div>').join('');
+ const original=bcMailUnifiedOldDetail(m);
+ return '<h3>'+bcInboxEscape(m.subject||'(No subject)')+'</h3><p class="muted">'+timeline.length+' messages · '+timeline.filter(x=>x.kind==='sent').length+' sent · '+timeline.filter(x=>x.kind==='incoming').length+' received</p>'+cards+'<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Message actions &amp; job association</summary><div style="padding-top:12px">'+original+'</div></details>';
+};
+const bcMailUnifiedPriorLoad=bcLoadInbox;
+bcLoadInbox=async function(){await Promise.all([bcMailUnifiedPriorLoad(),bcLoadSent()])};
+const bcMailUnifiedPriorSend=bcSendCompose;
+bcSendCompose=async function(ev){await bcMailUnifiedPriorSend(ev);if(bcMailTab==='inbox')await bcLoadSent()};
 </script>
 </body></html>
