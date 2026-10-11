@@ -1178,4 +1178,73 @@ const bcClientRowsBeforeJobs=bcClientRows;
 bcClientRows=function(items){const html=bcClientRowsBeforeJobs(items);return html.replace(/(<button class="btn secondary" onclick="bcOpenClientHistory\('([^']+)'\)">History<\/button>)/g,(_,button,id)=>button+' <button class="btn secondary" onclick="bcCoreOpenJobs(\''+id+'\')">Jobs</button>');};
 
 </script>
+
+<script>
+/* Blueprint Collective job detail workspace. All changes originate here. */
+let bcDetailJobId='',bcDetailData=null,bcDetailBusy=false,bcDetailError='';
+const bcJobPageBeforeDetails=bcJobsPage;
+bcJobsPage=function(){
+ const base=bcJobPageBeforeDetails();
+ if(!bcDetailJobId)return base.replace('</tbody></table>', '</tbody></table>');
+ const j=bcCoreJobs.find(x=>x.id===bcDetailJobId);
+ if(!j)return base;
+ const h=esc;
+ const details=bcDetailBusy?'<p>Loading job details…</p>':bcDetailError?'<p class="notice">'+h(bcDetailError)+'</p>':!bcDetailData?'<p>Open the job to view its records.</p>':
+ '<div style="display:grid;gap:16px">'+
+ '<div><h3>Job Notes</h3><form onsubmit="bcDetailAddNote(event)"><textarea name="body" rows="3" maxlength="10000" required placeholder="Add an internal job note" style="width:100%;padding:10px"></textarea><button class="btn" type="submit">Save Note</button></form>'+
+ (bcDetailData.notes.length?bcDetailData.notes.map(n=>'<div style="padding:12px;border-bottom:1px solid #ddd"><small>'+h(new Date(n.created_at).toLocaleString())+'</small><p style="white-space:pre-wrap">'+h(n.body)+'</p></div>').join(''):'<p class="muted">No notes yet.</p>')+'</div>'+
+ '<div><h3>Job Documents</h3><form onsubmit="bcDetailUpload(event)" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label>Document category<select name="category"><option>Quote</option><option>Proof</option><option>Invoice</option><option>Approval</option><option>Other</option></select></label><label>File (15 MB max)<input type="file" name="file" required></label><button class="btn" type="submit">Upload Document</button></form>'+
+ (bcDetailData.documents.length?'<div class="tablewrap"><table><thead><tr><th>Document</th><th>Category</th><th>Added</th><th></th></tr></thead><tbody>'+bcDetailData.documents.map(d=>'<tr><td>'+h(d.filename)+'</td><td>'+h(d.category)+'</td><td>'+h(new Date(d.created_at).toLocaleDateString())+'</td><td><button class="btn secondary" onclick="bcDetailDownload(\''+h(d.id)+'\')">Download</button></td></tr>').join('')+'</tbody></table></div>':'<p class="muted">No documents yet.</p>')+'</div>'+
+ '<p class="muted">Job correspondence and approval workflows will be connected in the next phase.</p></div>';
+ return base+'<section class="panel" style="margin-top:20px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><h2>Job Details</h2><p>'+h(j.job_number)+' · '+h(j.title)+' · '+h(j.client_name)+'</p></div><button class="btn secondary" onclick="bcDetailClose()">Close Details</button></div>'+details+'</section>';
+};
+const bcJobsRenderBeforeDetails=render;
+render=function(){
+ bcJobsRenderBeforeDetails();
+ if(page==='jobs'){
+ const table=document.querySelector('#view table tbody');
+ if(table){
+ for(const row of table.rows){
+  const edit=row.querySelector('button[onclick^="bcCoreJobEdit"]');
+  if(!edit)continue;
+  const id=edit.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+  if(!id||row.querySelector('.bc-detail-open'))continue;
+  const button=document.createElement('button');
+  button.type='button';button.className='btn secondary bc-detail-open';button.textContent='Details';
+  button.onclick=()=>bcDetailOpen(id);
+  edit.parentElement.insertBefore(button,edit);
+ }
+ }
+ }
+};
+async function bcDetailOpen(id){
+ bcDetailJobId=id;bcDetailBusy=true;bcDetailError='';bcDetailData=null;render();
+ await bcDetailReload();
+}
+async function bcDetailReload(){
+ try{const r=await bcJobsRequest({action:'details',id:bcDetailJobId});bcDetailData=r;bcDetailError='';}
+ catch(e){bcDetailError=e.message||String(e);}
+ finally{bcDetailBusy=false;render();}
+}
+function bcDetailClose(){bcDetailJobId='';bcDetailData=null;render()}
+async function bcDetailAddNote(e){
+ e.preventDefault();const f=e.currentTarget,b=f.querySelector('button');b.disabled=true;
+ try{await bcJobsRequest({action:'addNote',id:bcDetailJobId,body:f.elements.body.value});await bcDetailReload();}
+ catch(err){alert('Unable to save note: '+err.message);b.disabled=false;}
+}
+async function bcDetailUpload(e){
+ e.preventDefault();const f=e.currentTarget,b=f.querySelector('button'),file=f.elements.file.files[0];
+ if(!file)return;if(file.size>15*1024*1024){alert('Maximum file size is 15 MB');return;}
+ b.disabled=true;
+ try{
+ const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(file)});
+ await bcJobsRequest({action:'uploadDocument',id:bcDetailJobId,filename:file.name,category:f.elements.category.value,contentType:file.type||'application/octet-stream',base64});
+ await bcDetailReload();
+ }catch(err){alert('Upload failed: '+err.message);b.disabled=false;}
+}
+async function bcDetailDownload(documentId){
+ try{const r=await bcJobsRequest({action:'downloadDocument',id:bcDetailJobId,documentId});window.open(r.url,'_blank','noopener,noreferrer')}
+ catch(err){alert('Download failed: '+err.message)}
+}
+</script>
 </body></html>
