@@ -1824,7 +1824,7 @@ window.bcProdField=async(index,field,value)=>{
  if(!selectedJob||!bcProdStages[index])return;
  const r=(progress()[selectedJob]||{})[index]||{};
  const next={...r,[field]:value};
- try{await bcJobsRequest({action:'productionSaveEntry',id:selectedJob,stageId:bcProdStages[index].id,status:next.status||'Not Started',assignedTo:next.assignee||'',targetDate:next.target||null,completedDate:next.completed||null,notes:next.notes||''});await bcProdLoad();}
+ try{await bcJobsRequest({action:'productionSaveEntry',id:selectedJob,stageId:bcProdStages[index].id,status:next.status||'Not Started',assignedTo:next.assignee||'',targetDate:next.target||null,completedDate:next.completed||null,notes:next.notes||''});await bcCoreLoadJobs();await bcProdLoad();}
  catch(err){alert('Unable to save production stage: '+String(err.message||err));}
 };
 window.bcProdRefresh=async()=>{await bcCoreLoadJobs();await bcProdLoad()};
