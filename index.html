@@ -2181,4 +2181,33 @@ bcInboxLayout=function(){
  return top+'<section class="panel">'+tabs+notice+bcInboxFilterNotice()+'<div class="bc-mail-bar"><input id="bcMailSearch" placeholder="Search sender, subject, client…" value="'+bcInboxEscape(bcMailSearch)+'" oninput="bcMailFilter(this.value)"><span class="muted">'+messages.length+' messages</span></div>'+(bcInboxBusy?'<p>Loading messages…</p>':'')+'<div class="bc-mail-layout"><div class="bc-mail-list">'+(rows||'<p style="padding:16px">No matching messages.</p>')+'</div><div class="bc-mail-reader">'+(selected?bcInboxDetail(selected):'<p class="muted">Select a message to read or reply.</p>')+'</div></div></section>';
 };
 </script>
+
+<script>
+let bcMailJobLinks=[],bcMailJobBusy=false,bcMailJobFeedback='';
+async function bcMailJobRequest(action,extra={}){
+ if(!bcSession?.access_token)throw Error('Please sign in again');
+ const response=await fetch(BC_URL+'/functions/v1/blueprint-email-inbox',{method:'POST',headers:bcAuthHeaders(bcSession.access_token),body:JSON.stringify({action,...extra})});
+ const result=await response.json();if(!response.ok)throw Error(result.error||'Unable to update job association');return result;
+}
+async function bcMailLoadJobLinks(){
+ try{const result=await bcMailJobRequest('jobLinks');bcMailJobLinks=result.links||[];if(page==='email')render()}catch(e){console.error('Unable to load email job links',e)}
+}
+async function bcMailLinkJob(emailId){
+ const select=document.getElementById('bcMailJobSelect');const jobId=select?.value;
+ if(!jobId){bcMailJobFeedback='Select a job first.';render();return}
+ bcMailJobBusy=true;bcMailJobFeedback='';try{
+ await bcMailJobRequest('linkJob',{emailId,jobId});const result=await bcMailJobRequest('jobLinks');bcMailJobLinks=result.links||[];bcMailJobFeedback='Email linked to job successfully.';
+ }catch(e){bcMailJobFeedback=e.message||String(e)}finally{bcMailJobBusy=false;render()}
+}
+const bcMailJobOriginalDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ const original=bcMailJobOriginalDetail(m);if(!m)return original;
+ const current=bcMailJobLinks.find(x=>String(x.email_id)===String(m.id))?.job_id||'';
+ const jobs=(typeof bcCoreJobs!=='undefined'?bcCoreJobs:[]);
+ const options=jobs.map(j=>'<option value="'+bcInboxEscape(j.id)+'" '+(String(j.id)===String(current)?'selected':'')+'>'+bcInboxEscape((j.job_number||'')+' · '+(j.title||'Untitled')+' · '+(j.client_name||''))+'</option>').join('');
+ return original+'<div style="border-top:1px solid #dce5ef;margin-top:22px;padding-top:16px"><h4>Associated Job</h4><p class="muted">Save the message to a specific job record.</p><select id="bcMailJobSelect" style="width:100%;padding:11px;border:1px solid #d5deeb;border-radius:8px"><option value="">Choose a job…</option>'+options+'</select><div style="margin-top:10px"><button class="btn" '+(bcMailJobBusy?'disabled':'')+' onclick="bcMailLinkJob(\''+bcInboxEscape(m.id)+'\')">Save Job Link</button></div>'+(bcMailJobFeedback?'<p class="notice">'+bcInboxEscape(bcMailJobFeedback)+'</p>':'')+'</div>';
+};
+const bcMailJobPreviousLoad=bcLoadInbox;
+bcLoadInbox=async function(){await bcMailJobPreviousLoad();await bcMailLoadJobLinks()};
+</script>
 </body></html>
