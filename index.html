@@ -1759,7 +1759,7 @@ render=function(){
    by organization, pending the production database/API integration. */
 (function(){
 const defaults=['Artwork & Design','Materials & Ordering','Production','Quality Control','Delivery & Fulfillment'];
-let selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdLoading=false,bcProdError='';
+let bcProdWorkloadEmployee='all',selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdEmployees=[],bcProdLoading=false,bcProdError='';
 const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||'default');
 const stages=()=>bcProdStages.map(x=>x.name);
 const progress=()=>{
@@ -1789,6 +1789,30 @@ function summary(){
   ['Closed',jobs.filter(j=>j.status==='Closed').length]
  ].map(([name,n])=>'<div class="bc-prod-card"><div class="muted">'+name+'</div><div class="bc-prod-num">'+n+'</div></div>').join('')+'</div>';
 }
+function workloadPage(){
+ const jobs=activeJobs(), byJob=progress(), employees=bcProdEmployees;
+ const rows=[];
+ for(const job of jobs){
+  const rec=byJob[String(job.id)]||{};
+  bcProdStages.forEach((stage,i)=>{
+   const r=rec[i]||{};
+   if(!r.employeeId)return;
+   const person=employees.find(p=>p.id===r.employeeId);
+   rows.push({job,stage,index:i,person,name:person?.full_name||r.assignee||'Unknown employee',status:r.status||'Not Started',target:r.target||'',employeeId:r.employeeId});
+  });
+ }
+ const selected=bcProdWorkloadEmployee;
+ const filtered=rows.filter(r=>selected==='all'||r.employeeId===selected);
+ const active=filtered.filter(r=>r.status!=='Completed');
+ const today=new Date().toISOString().slice(0,10);
+ const overdue=active.filter(r=>r.target&&r.target<today);
+ const opts='<option value="all">All employees</option>'+employees.map(p=>'<option value="'+e(p.id)+'" '+(selected===p.id?'selected':'')+'>'+e(p.full_name)+(p.active?'':' (Inactive)')+'</option>').join('');
+ return '<section class="bc-prod-panel" style="margin:18px 0"><div class="bc-prod-head"><div><h3>Employee Workload</h3><p class="muted">Assignments from your Staff Directory, linked to production stages.</p></div><div><label for="bc-workload-filter">Employee</label><select id="bc-workload-filter" onchange="bcProdWorkloadFilter(this.value)">'+opts+'</select></div></div>'+
+ '<div class="bc-prod-cards">'+[['Assigned stages',filtered.length],['Active assignments',active.length],['In progress',active.filter(r=>r.status==='In Progress').length],['Overdue',overdue.length]].map(([label,value])=>'<div class="bc-prod-card"><div class="muted">'+label+'</div><div class="bc-prod-num">'+value+'</div></div>').join('')+'</div>'+
+ '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;text-align:left"><thead><tr><th style="padding:10px">Employee</th><th style="padding:10px">Job</th><th style="padding:10px">Stage</th><th style="padding:10px">Status</th><th style="padding:10px">Due</th><th style="padding:10px">Action</th></tr></thead><tbody>'+
+ (filtered.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.target||'9999').localeCompare(b.target||'9999')).map(r=>'<tr style="border-top:1px solid #e5e7eb"><td style="padding:10px">'+e(r.name)+'</td><td style="padding:10px">'+e(r.job.job_number||'Job')+' · '+e(r.job.title||'')+'</td><td style="padding:10px">'+e(r.stage.name)+'</td><td style="padding:10px">'+e(r.status)+'</td><td style="padding:10px">'+(r.target?e(r.target)+(r.target<today&&r.status!=='Completed'?' <b style="color:#b42318">Overdue</b>':''):'—')+'</td><td style="padding:10px"><button class="btn secondary" onclick="bcProdSelect(\''+e(r.job.id)+'\')">Open Job</button></td></tr>').join('')||'<tr><td colspan="6" style="padding:16px" class="muted">No production assignments for this selection.</td></tr>')+'</tbody></table></div></section>';
+}
+window.bcProdWorkloadFilter=value=>{bcProdWorkloadEmployee=value;render()};
 function productionPage(){
  const jobs=activeJobs(), names=stages(), all=progress();
  const job=jobs.find(j=>String(j.id)===String(selectedJob))||jobs[0];
