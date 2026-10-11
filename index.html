@@ -1820,8 +1820,11 @@ window.bcProdAdd=()=>{const a=stages();a.push('New Production Stage');write('sta
 window.bcProdReset=()=>{if(confirm('Restore the default production stages for this organization?')){write('stages',defaults);render()}};
 const originalRender=render;
 render=function(){
- originalRender();
- if(page!=='production'&&page!=='production-settings')return;
+ const productionView=page==='production'||page==='production-settings';
+ const intendedPage=page;
+ if(productionView)page='jobs';
+ try{originalRender()}finally{page=intendedPage}
+ if(!productionView)return;
  const nav=document.getElementById('nav');
  if(nav&&!nav.querySelector('[data-prod-nav]')){
   const btn=document.createElement('button');btn.className='nav';btn.dataset.prodNav='1';btn.innerHTML='<span>▥</span>Production Management';
