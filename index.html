@@ -2470,13 +2470,19 @@ const bcThreadOldInboxLayout=bcInboxLayout;
 bcInboxLayout=function(){
  let html=bcThreadOldInboxLayout();
  if(bcMailTab!=='inbox')return html;
- for(const t of bcMailBuildThreads(bcInboxVisibleMessages())){
-  const m=t.latest,st=bcThreadCurrent(m);
-  const label=st.status+(st.assigned_to?' · '+(bcThreadStaff.find(u=>u.id===st.assigned_to)?.email||'Assigned'):'');
-  const needle='<small>'+bcInboxEscape(m.sender)+'</small>';
-  html=html.replace(needle,needle+'<small style="font-weight:600">'+bcInboxEscape(label)+'</small>');
- }
- return html;
+ // Work within each conversation row, not a global sender match: several
+ // conversations may share the same sender address.
+ const states=new Map(bcMailBuildThreads(bcInboxVisibleMessages()).map(t=>{
+  const st=bcThreadCurrent(t.latest);
+  const who=bcThreadStaff.find(u=>u.id===st.assigned_to)?.email||'Assigned';
+  return [String(t.latest.id),st.status+(st.assigned_to?' · '+who:' · Unassigned')];
+ }));
+ return html.replace(/(<button class="bc-mail-item [\s\S]*?<\/button>)/g,row=>{
+  const id=(row.match(/bcOpenInboxMessage\('([^']+)'\)/)||[])[1];
+  const label=states.get(id);
+  if(!label)return row;
+  return row.replace(/(<small>[^<]*<\/small>)/, '$1<small class="bc-email-thread-state">'+bcInboxEscape(label)+'</small>');
+ });
 };
 const bcThreadOldLoadInbox=bcLoadInbox;
 bcLoadInbox=async function(){await bcThreadOldLoadInbox();await bcThreadLoad()};
