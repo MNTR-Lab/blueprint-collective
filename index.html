@@ -2305,7 +2305,7 @@ bcInboxDetail=function(m){
  const cards=timeline.map(x=>'<div style="border-bottom:1px solid #e3e9f0;padding:12px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong>'+(x.kind==='sent'?'↗ Sent':'↙ Received')+'</strong><span class="muted">'+bcInboxEscape(new Date(x.date).toLocaleString())+'</span></div><div style="font-size:12px;margin-top:5px"><b>From:</b> '+bcInboxEscape(x.from)+'<br><b>To:</b> '+bcInboxEscape(x.to)+'</div><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+bcInboxEscape(x.body)+'</p></div>').join('');
  const original=bcMailUnifiedOldDetail(m);
  return '<h3>'+bcInboxEscape(m.subject||'(No subject)')+'</h3><p class="muted">'+timeline.length+' messages · '+timeline.filter(x=>x.kind==='sent').length+' sent · '+timeline.filter(x=>x.kind==='incoming').length+' received</p>'+cards+
- '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn" onclick="bcReplyIncoming(\\''+bcInboxEscape(m.id)+'\\')">Reply</button><button class="btn secondary" onclick="bcMailReplyAll(\\''+bcInboxEscape(m.id)+'\\')">Reply All</button></div>'+
+ '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn" onclick="bcReplyIncoming(\''+bcInboxEscape(m.id)+'\')">Reply</button><button class="btn secondary" onclick="bcMailReplyAll(\''+bcInboxEscape(m.id)+'\')">Reply All</button></div>'+
  '<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Job association &amp; message details</summary><div style="padding-top:12px">'+original+'</div></details>';
 };
 const bcMailUnifiedPriorLoad=bcLoadInbox;
@@ -2323,5 +2323,100 @@ function bcMailReplyAll(id){
  const client=bcEmailClientMatch(m);
  bcOpenCompose(to,subject,'\\n\\n--- Original message ---\\n'+bcEmailBody(m).slice(0,10000),client?.id||null);
 }
+</script>
+
+<script>
+/* Step 3: Email attachments. MIME parts are decoded in-browser, not exposed as public URLs. */
+let bcComposeAttachments=[];
+const bcAttachmentOldOpenCompose=bcOpenCompose;
+bcOpenCompose=function(...args){bcComposeAttachments=[];return bcAttachmentOldOpenCompose(...args)};
+const bcAttachmentOldSwitch=bcMailSwitch;
+bcMailSwitch=function(tab){if(tab!=='compose')bcComposeAttachments=[];return bcAttachmentOldSwitch(tab)};
+function bcAttachmentReadFiles(input){
+ const files=[...(input.files||[])];input.value='';
+ if(files.length+bcComposeAttachments.length>5){alert('Maximum 5 attachments.');return}
+ for(const file of files){
+  if(file.size>5*1024*1024){alert(file.name+' exceeds the 5 MB per-file limit.');return}
+  if(!/^[\w .()\-]+$/.test(file.name)||file.name.length>150){alert('Rename the file using letters, numbers, spaces, periods, underscores or hyphens.');return}
+ }
+ if(files.reduce((n,f)=>n+f.size,0)+bcComposeAttachments.reduce((n,f)=>n+f.size,0)>7.5*1024*1024){alert('Combined attachments cannot exceed 7.5 MB.');return}
+ bcComposeAttachments.push(...files);render();
+}
+function bcAttachmentRemove(i){bcComposeAttachments.splice(i,1);render()}
+const bcAttachmentOldComposeLayout=bcOutgoingComposeLayout;
+bcOutgoingComposeLayout=function(){
+ let html=bcAttachmentOldComposeLayout();
+ const widget='<div style="margin:12px 0"><label style="display:block;font-weight:600;margin-bottom:6px">Attachments (up to 5 files, 5 MB each)</label><input type="file" multiple onchange="bcAttachmentReadFiles(this)" aria-label="Attach files"><div style="margin-top:8px">'+bcComposeAttachments.map((f,i)=>'<div style="margin:5px 0">'+bcInboxEscape(f.name)+' ('+(f.size/1024).toFixed(0)+' KB) <button class="btn secondary" type="button" onclick="bcAttachmentRemove('+i+')">Remove</button></div>').join('')+'</div></div>';
+ return html.replace('<div class="actions"><button class="btn" type="submit"',widget+'<div class="actions"><button class="btn" type="submit"');
+};
+function bcAttachmentBase64(file){
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+  reader.onerror=()=>reject(Error('Could not read '+file.name));
+  reader.readAsDataURL(file);
+ });
+}
+bcSendCompose=async function(ev){
+ ev.preventDefault();if(bcSendBusy)return;
+ bcSendBusy=true;bcSendFeedback='';render();
+ try{
+  const attachments=await Promise.all(bcComposeAttachments.map(async f=>({filename:f.name,content:await bcAttachmentBase64(f)})));
+  await bcOutgoingRequest('send',{to:bcComposeTo,subject:bcComposeSubject,body:bcComposeBody,clientId:bcComposeClientId,attachments});
+  bcComposeAttachments=[];bcComposeOpen=false;bcComposeTo='';bcComposeSubject='';bcComposeBody='';bcComposeClientId=null;
+  bcMailTab='sent';bcSendFeedback='Email submitted successfully'+(attachments.length?' with '+attachments.length+' attachment(s)':'')+'.';
+  await bcLoadSent();
+ }catch(e){bcSendFeedback=e.message||String(e)}
+ finally{bcSendBusy=false;if(page==='email')render()}
+};
+function bcMimeAttachments(m){
+ const raw=bcMimeText(m.raw_mime_base64);
+ if(!raw)return [];
+ const boundary=(raw.match(/boundary\s*=\s*(?:"([^"]+)"|([^;\s\r\n]+))/i)||[]);
+ if(!boundary[1]&&!boundary[2])return [];
+ const parts=raw.split('--'+(boundary[1]||boundary[2]));
+ const found=[];
+ for(const part of parts){
+  const sep=part.search(/\r?\n\r?\n/);if(sep<0)continue;
+  const head=part.slice(0,sep);
+  const disposition=(head.match(/^Content-Disposition:\s*([^\r\n]+)/im)||[])[1]||'';
+  const name=(disposition.match(/filename\s*=\s*"([^"]+)"/i)||disposition.match(/filename\s*=\s*([^;\s]+)/i)||[])[1];
+  if(!name||!/attachment/i.test(disposition))continue;
+  const transfer=(head.match(/^Content-Transfer-Encoding:\s*([^\r\n]+)/im)||[])[1]||'';
+  if(!/base64/i.test(transfer))continue;
+  const content=part.slice(sep).replace(/^\r?\n\r?\n/,'').replace(/--\s*$/,'').replace(/[^A-Za-z0-9+/=]/g,'');
+  if(content.length>14*1024*1024)continue;
+  found.push({name,content,type:(head.match(/^Content-Type:\s*([^;\r\n]+)/im)||[])[1]||'application/octet-stream'});
+ }
+ return found;
+}
+function bcAttachmentDownload(messageId,index){
+ const m=bcInboxMessages.find(x=>String(x.id)===String(messageId));if(!m)return;
+ const a=bcMimeAttachments(m)[index];if(!a)return;
+ try{
+  const bytes=Uint8Array.from(atob(a.content),c=>c.charCodeAt(0));
+  const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
+  const link=document.createElement('a');link.href=url;link.download=a.name.replace(/[\\/:*?"<>|]/g,'_');document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }catch(e){alert('Could not decode attachment.')}
+}
+const bcAttachmentOldTimeline=bcMailUnifiedTimeline;
+bcMailUnifiedTimeline=function(m){
+ const timeline=bcAttachmentOldTimeline(m);
+ for(const x of timeline){
+  if(x.kind==='incoming'){const mail=bcInboxMessages.find(y=>String(y.id)===String(x.id));x.attachments=mail?bcMimeAttachments(mail):[]}
+  else{const mail=bcSentMessages.find(y=>String(y.id)===String(x.id));x.attachments=(mail?.attachment_names||[]).map(name=>({name}))}
+ }
+ return timeline;
+};
+const bcAttachmentOldDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ const html=bcAttachmentOldDetail(m);
+ if(!m)return html;
+ const timeline=bcMailUnifiedTimeline(m);
+ const groups=timeline.filter(x=>x.attachments?.length).map(x=>'<div style="padding:8px 0"><strong>'+bcInboxEscape(x.kind==='incoming'?'Received':'Sent')+' · '+bcInboxEscape(new Date(x.date).toLocaleString())+'</strong>'+x.attachments.map((a,i)=>'<div style="margin-top:6px">'+bcInboxEscape(a.name)+' '+(x.kind==='incoming'?'<button class="btn secondary" onclick="bcAttachmentDownload(\''+bcInboxEscape(x.id)+'\','+i+')">Download</button>':'<span class="muted">(sent with email)</span>')+'</div>').join('')+'</div>').join('');
+ if(!groups)return html;
+ return html.replace('<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">','<section style="margin-top:14px;border-top:1px solid #dce4ee;padding-top:12px"><h4>Conversation attachments</h4>'+groups+'</section><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">');
+};
 </script>
 </body></html>
