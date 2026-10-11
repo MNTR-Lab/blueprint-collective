@@ -1337,27 +1337,62 @@ async function bcDetailOpen(id){
  bcDetailJobId=id;bcDetailBusy=true;bcDetailError='';bcDetailData=null;render();
  await bcDetailReload();
 }
-async function bcSyncApprovalJobStatus(detail){
- // Front-end reconciliation. The blueprint-jobs backend should also perform
- // these transitions when a client submits a decision through a secure link.
- const job=detail?.job, approvals=detail?.approvals||[];
- if(!job||!approvals.length||['Completed','Closed','Cancelled','In Production'].includes(job.status))return detail;
- const ordered=[...approvals].sort((a,b)=>new Date(b.updated_at||b.reviewed_at||b.created_at||0)-new Date(a.updated_at||a.reviewed_at||a.created_at||0));
- const latest=ordered[0];if(!latest)return detail;
- let target='';
- if(latest.status==='Pending Approval'||latest.status==='Changes Requested')target='Awaiting Approval';
- else if(latest.status==='Approved'&&job.status==='Awaiting Approval')target='Ready for Production';
- if(!target||job.status===target)return detail;
- await bcJobsRequest({action:'update',id:job.id||bcDetailJobId,status:target});
- detail.job={...job,status:target};
- const cached=bcCoreJobs.find(x=>String(x.id)===String(job.id||bcDetailJobId));if(cached)cached.status=target;
+// Supabase is the authority for approval transitions; the browser must never
+// independently change a job status based on only the most recent approval.
+function bcSyncApprovalJobStatus(detail){
+ const job=detail?.job;
+ if(!job)return detail;
+ const cached=bcCoreJobs.find(x=>String(x.id)===String(job.id||bcDetailJobId));
+ if(cached)Object.assign(cached,job);
  return detail;
 }
 async function bcDetailReload(){
- try{const r=await bcJobsRequest({action:'details',id:bcDetailJobId});bcDetailData=r;bcDetailError='';try{await bcSyncApprovalJobStatus(r)}catch(syncErr){console.warn('Approval status sync:',syncErr.message)}}
- catch(e){bcDetailError=e.message||String(e);}
- finally{bcDetailBusy=false;render();}
+ const requestedId=bcDetailJobId;
+ if(!requestedId)return;
+ try{
+  const r=await bcJobsRequest({action:'details',id:requestedId});
+  if(requestedId!==bcDetailJobId)return;
+  bcDetailData=r;bcDetailError='';
+  bcSyncApprovalJobStatus(r);
+  // Refresh the table from the same backend after approval-related actions.
+  // Avoid a second full-page render while the list is being fetched.
+  const list=await bcJobsRequest({action:'list'});
+  if(requestedId!==bcDetailJobId)return;
+  bcCoreJobs=list.jobs||[];
+  bcJobsLoaded=true;
+ }catch(e){if(requestedId===bcDetailJobId)bcDetailError=e.message||String(e);}
+ finally{if(requestedId===bcDetailJobId){bcDetailBusy=false;render();}}
 }
+// Client approvals happen outside this page. Keep the list and the opened
+// job synchronized while this tab is visible, without disrupting editing.
+let bcJobsAutoRefreshBusy=false;
+async function bcJobsAutoRefresh(){
+ if(bcJobsAutoRefreshBusy||page!=='jobs'||document.hidden||!bcSession?.access_token||
+    bcJobsBusy||bcJobFormOpen||bcJobEditing||bcDetailBusy)return;
+ const active=document.activeElement;
+ if(active&&['INPUT','TEXTAREA','SELECT'].includes(active.tagName)&&active.closest('#view'))return;
+ bcJobsAutoRefreshBusy=true;
+ try{
+  const list=await bcJobsRequest({action:'list'});
+  if(page!=='jobs'||document.hidden)return;
+  const fresh=list.jobs||[];
+  const changed=JSON.stringify(fresh.map(j=>[j.id,j.status,j.sync_status,j.updated_at]))!==
+    JSON.stringify(bcCoreJobs.map(j=>[j.id,j.status,j.sync_status,j.updated_at]));
+  bcCoreJobs=fresh;bcJobsLoaded=true;
+  if(bcDetailJobId){
+   const id=bcDetailJobId;
+   const detail=await bcJobsRequest({action:'details',id});
+   if(id!==bcDetailJobId||page!=='jobs')return;
+   const detailChanged=JSON.stringify([detail.job?.status,detail.approvals?.map(a=>[a.id,a.status,a.revision_status])])!==
+     JSON.stringify([bcDetailData?.job?.status,bcDetailData?.approvals?.map(a=>[a.id,a.status,a.revision_status])]);
+   if(detailChanged){bcDetailData=detail;bcSyncApprovalJobStatus(detail);render();}
+   else if(changed)render();
+  }else if(changed)render();
+ }catch(e){console.warn('Jobs background refresh:',e.message);}
+ finally{bcJobsAutoRefreshBusy=false;}
+}
+setInterval(bcJobsAutoRefresh,12000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)bcJobsAutoRefresh();});
 function bcDetailClose(){bcDetailJobId='';bcDetailData=null;render()}
 async function bcDetailAddNote(e){
  e.preventDefault();const f=e.currentTarget,b=f.querySelector('button');b.disabled=true;
