@@ -468,4 +468,146 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  if(root)new MutationObserver(()=>{queueMicrotask(enhanceAssignments)}).observe(root,{childList:true});
 })();
 </script>
+
+<style id="bc-dedicated-workspace-styles">
+body.employee-authenticated #workspace{position:relative}
+#bcDashboardHome{display:none}
+body.bc-view-dashboard #bcDashboardHome{display:block}
+body.bc-view-dashboard #employee-notifications,
+body.bc-view-dashboard #employee-jobs,
+body.bc-view-dashboard #employee-tasks,
+body.bc-view-dashboard #employee-email,
+body.bc-view-dashboard #bcMessagesDrawer,
+body.bc-view-dashboard #tasknotepanel{display:none!important}
+body.bc-view-jobs #employee-notifications,
+body.bc-view-jobs #employee-tasks,
+body.bc-view-jobs #employee-email,
+body.bc-view-jobs #bcMessagesDrawer,
+body.bc-view-jobs #tasknotepanel{display:none!important}
+body.bc-view-tasks #employee-notifications,
+body.bc-view-tasks #employee-jobs,
+body.bc-view-tasks #employee-email,
+body.bc-view-tasks #bcMessagesDrawer{display:none!important}
+body.bc-view-email #employee-notifications,
+body.bc-view-email #employee-jobs,
+body.bc-view-email #employee-tasks,
+body.bc-view-email #bcMessagesDrawer,
+body.bc-view-email #tasknotepanel{display:none!important}
+body.bc-view-messages #employee-notifications,
+body.bc-view-messages #employee-jobs,
+body.bc-view-messages #employee-tasks,
+body.bc-view-messages #employee-email,
+body.bc-view-messages #tasknotepanel{display:none!important}
+body.bc-view-notifications #employee-jobs,
+body.bc-view-notifications #employee-tasks,
+body.bc-view-notifications #employee-email,
+body.bc-view-notifications #bcMessagesDrawer,
+body.bc-view-notifications #tasknotepanel{display:none!important}
+body[class*="bc-view-"] #workspace>.grid{display:none}
+body.bc-view-dashboard #workspace>.grid{display:grid}
+body.bc-view-messages #bcMessagesDrawer{display:block!important}
+body[class*="bc-view-"] #workspace>.employee-fold:not(.bc-active-view){display:none!important}
+body[class*="bc-view-"] #workspace>.employee-fold.bc-active-view{display:block!important}
+.bc-dashboard-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.bc-dashboard-card{background:#fff;border:1px solid #dce6f0;border-radius:13px;padding:19px;text-align:left;color:#19334f;min-height:125px;box-shadow:0 5px 18px #18344d08}
+.bc-dashboard-card:hover{background:#f1f6fc;border-color:#9bb7d3}
+.bc-dashboard-card b{display:block;font-size:17px;margin:9px 0 5px}
+.bc-dashboard-card small{color:#65788b;font-size:12px;line-height:1.5}
+.bc-dashboard-card .bc-card-icon{font-size:23px}
+.bc-dashboard-panel{background:#fff;border:1px solid #dce6f0;border-radius:13px;padding:22px;margin-top:16px}
+.bc-dashboard-panel h2{font-size:17px;margin:0 0 12px}
+.bc-dashboard-activity{padding:12px 0;border-bottom:1px solid #e5ebf2;font-size:13px;color:#344b62}
+.bc-dashboard-activity:last-child{border-bottom:0}
+.bc-dashboard-action{background:#eef3f8;color:#19334f;padding:7px 11px;margin-top:9px}
+body[class*="bc-view-"] #workspace>div:first-of-type{margin-bottom:15px}
+@media(max-width:700px){.bc-dashboard-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:440px){.bc-dashboard-cards{grid-template-columns:1fr}}
+</style>
+<script id="bc-dedicated-workspace-navigation">
+(function(){
+ const views={ 'employee-dashboard':'dashboard','employee-jobs':'jobs','employee-tasks':'tasks','employee-email':'email','employee-messages':'messages','employee-notifications':'notifications'};
+ const ids=Object.keys(views);
+ const workspace=document.getElementById('workspace');
+ if(!workspace)return;
+ const home=document.createElement('section');
+ home.id='bcDashboardHome';
+ home.innerHTML=`<div class="bc-dashboard-cards">
+ <button type="button" class="bc-dashboard-card" data-go="employee-jobs"><span class="bc-card-icon">▣</span><b>My Jobs</b><small>View your assigned projects and production work</small></button>
+ <button type="button" class="bc-dashboard-card" data-go="employee-tasks"><span class="bc-card-icon">☑</span><b>My Tasks</b><small>Manage due dates, progress, and archived tasks</small></button>
+ <button type="button" class="bc-dashboard-card" data-go="employee-notifications"><span class="bc-card-icon">♧</span><b>Notifications</b><small id="bcDashAlerts">Review new assignments and updates</small></button>
+ <button type="button" class="bc-dashboard-card" data-go="employee-email"><span class="bc-card-icon">✉</span><b>My Email</b><small>Read conversations assigned to you</small></button>
+ <button type="button" class="bc-dashboard-card" data-go="employee-messages"><span class="bc-card-icon">◉</span><b>Team Messages</b><small>Collaborate with your coworkers</small></button>
+ </div><div class="bc-dashboard-panel"><h2>Recent Notifications</h2><div id="bcDashActivity">Loading updates…</div><button type="button" class="secondary" data-go="employee-notifications">See All Notifications</button></div>`;
+ const anchor=document.getElementById('employee-dashboard');
+ anchor?.insertAdjacentElement('afterend',home);
+ function openFold(id){
+   const section=document.getElementById(id==='employee-messages'?'bcMessagesDrawer':id);
+   if(!section)return;
+   section.classList.add('is-open');
+   const body=section.querySelector('.employee-fold-body');if(body)body.hidden=false;
+   section.querySelector('.employee-fold-toggle')?.setAttribute('aria-expanded','true');
+ }
+ async function navigate(id,updateHash=true){
+   if(!views[id])id='employee-dashboard';
+   document.body.classList.remove(...Object.values(views).map(x=>'bc-view-'+x));
+   document.body.classList.add('bc-view-'+views[id]);
+   document.querySelectorAll('#workspace>.employee-fold').forEach(f=>f.classList.remove('bc-active-view'));
+   const target=document.getElementById(id==='employee-messages'?'bcMessagesDrawer':id);
+   if(target)target.classList.add('bc-active-view');
+   openFold(id);
+   document.querySelectorAll('[data-employee-nav]').forEach(a=>a.classList.toggle('active',a.dataset.employeeNav===id));
+   const titles={'employee-dashboard':'Dashboard','employee-jobs':'My Jobs','employee-tasks':'My Tasks','employee-email':'My Email','employee-messages':'Team Messages','employee-notifications':'Notifications'};
+   const header=document.querySelector('header b span');if(header)header.textContent='/ '+titles[id];
+   document.getElementById('employeeSidebar')?.classList.remove('mobile-open');
+   if(id==='employee-messages'){
+     const drawer=document.getElementById('bcMessagesDrawer');if(drawer)drawer.style.display='block';
+     if(typeof bcMessagesEmployee!=='undefined')bcMessagesEmployee.list();
+   }
+   if(id==='employee-email'&&typeof loadEmail==='function')loadEmail();
+   if(updateHash&&location.hash!=='#'+id)history.replaceState(null,'','#'+id);
+   window.scrollTo({top:0,behavior:'instant'});
+ }
+ window.bcEmployeeNavigate=navigate;
+ document.querySelectorAll('[data-employee-nav]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();navigate(a.dataset.employeeNav)},true));
+ home.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>navigate(b.dataset.go));
+ window.addEventListener('hashchange',()=>navigate(location.hash.slice(1),false));
+ const originalOpenJob=window.openJob;
+ if(typeof originalOpenJob==='function'){
+   window.openJob=async function(id){await navigate('employee-jobs');return originalOpenJob(id)};
+   openJob=window.openJob;
+ }
+ if(typeof window.employeeTaskNotes==='function'){
+   const originalTaskNotes=window.employeeTaskNotes;
+   window.employeeTaskNotes=async function(...args){await navigate('employee-tasks');return originalTaskNotes(...args)};
+   employeeTaskNotes=window.employeeTaskNotes;
+ }
+ document.addEventListener('click',e=>{
+   if(e.target.closest('#bcUnreadMessageShortcut'))navigate('employee-messages');
+ },true);
+ async function refreshDashboard(){
+   if(workspace.classList.contains('hide'))return;
+   try{
+     const result=await call('notifications_list');
+     const unread=(result.items||[]).filter(n=>!n.read_at);
+     const alerts=document.getElementById('bcDashAlerts');
+     if(alerts)alerts.textContent=unread.length?unread.length+' unread notification'+(unread.length===1?'':'s'):'All caught up';
+     const activity=document.getElementById('bcDashActivity');
+     if(activity)activity.innerHTML=unread.slice(0,4).map(n=>'<div class="bc-dashboard-activity"><strong>'+esc(n.title||'Notification')+'</strong><div>'+esc(n.message||'')+'</div><button class="bc-dashboard-action" data-go="employee-notifications">Open Notification</button></div>').join('')||'<p>No unread notifications.</p>';
+     activity?.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>navigate(b.dataset.go));
+   }catch(e){const activity=document.getElementById('bcDashActivity');if(activity)activity.textContent='Open Notifications to view your updates.'}
+ }
+ const previousRefresh=window.refreshEmployeeNotifications;
+ if(typeof previousRefresh==='function'){
+   window.refreshEmployeeNotifications=async function(...args){const r=await previousRefresh(...args);refreshDashboard();return r};
+   refreshEmployeeNotifications=window.refreshEmployeeNotifications;
+ }
+ const priorShow=window.show;
+ if(typeof priorShow==='function'){
+   window.show=async function(...args){const r=await priorShow(...args);navigate(location.hash.slice(1),false);refreshDashboard();return r};
+   show=window.show;
+ }
+ navigate(location.hash.slice(1),false);
+ setTimeout(refreshDashboard,1300);
+})();
+</script>
 </body></html>
