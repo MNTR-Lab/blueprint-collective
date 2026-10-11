@@ -682,6 +682,17 @@ async function bcOpenTaskJob(jobId){
  page='jobs';bcJobSelected=null;render();await bcLoadJobs();await bcJobOpen(jobId);
 }
 
+const bcOriginalTaskDashboard=bcTaskDashboard;
+bcTaskDashboard=function(){
+ const base=bcOriginalTaskDashboard();
+ const rows=(window.bcProductionTasks?.()||[]);
+ const today=new Date().toISOString().slice(0,10);
+ const shown=rows.filter(r=>(bcTaskFilter==='All'||(bcTaskFilter==='Overdue'?r.status!=='Completed'&&r.due_date&&r.due_date<today:bcTaskFilter==='To Do'?r.status==='Not Started':r.status===bcTaskFilter))&&(bcTaskAssignee==='all'||(bcTaskAssignee!=='unassigned'&&r.employee_id===bcTaskAssignee))&&(!bcTaskQuery||[r.stage,r.assigned_to,r.job?.job_number,r.job?.title,r.job?.client_name].some(x=>String(x||'').toLowerCase().includes(bcTaskQuery.toLowerCase()))));
+ const html='<section class="panel bc-task-panel" style="margin-top:18px"><div class="bc-task-toolbar"><div><h3>Production assignments</h3><p class="notice">Automatically linked to production stages · '+shown.length+' assignment(s)</p></div><button class="btn secondary" onclick="bcProductionTaskRefresh()">↻ Refresh Production</button></div>'+
+ '<div class="bc-task-tablewrap"><table class="bc-task-table"><thead><tr><th>Production stage / Job</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody>'+
+ (shown.map(r=>'<tr><td><strong>'+esc(r.stage)+'</strong><small>'+esc(r.job?.job_number||'Job')+' · '+esc(r.job?.title||'')+'</small></td><td>'+esc(r.assigned_to)+'</td><td>'+esc(r.due_date||'Not set')+'</td><td><select class="field bc-task-status" onchange="bcProductionTaskStatus(\''+esc(r.job_id)+'\',\''+esc(r.stage_id)+'\',this.value)">'+['Not Started','In Progress','On Hold','Completed'].map(st=>'<option '+(r.status===st?'selected':'')+'>'+st+'</option>').join('')+'</select></td><td><button class="btn secondary" onclick="bcProductionOpenJob(\''+esc(r.job_id)+'\')">Open Job</button></td></tr>').join('')||'<tr><td colspan="5" class="bc-task-empty">No assigned production stages match this view.</td></tr>')+'</tbody></table></div></section>';
+ return base+html;
+};
 const BC_EMPLOYEE_FN=BC_URL+'/functions/v1/blueprint-employee';
 async function bcEmployeeCall(action,extra={}){
  if(!bcSession?.access_token)throw Error('Please sign in again.');
@@ -1777,6 +1788,25 @@ async function bcProdLoad(){
  }catch(err){bcProdError=String(err?.message||err);}
  finally{bcProdLoading=false;if(page==='production'||page==='production-settings')render();}
 }
+window.bcProductionTasks=()=>bcProdEntries.filter(r=>r.employee_id).map(r=>({
+ id:r.id,job_id:r.job_id,stage_id:r.stage_id,employee_id:r.employee_id,
+ assigned_to:bcProdEmployees.find(x=>x.id===r.employee_id)?.full_name||r.assigned_to||'',
+ stage:bcProdStages.find(x=>x.id===r.stage_id)?.name||'Production stage',
+ job:bcCoreJobs.find(x=>String(x.id)===String(r.job_id)),
+ status:r.status||'Not Started',due_date:r.target_date||''
+}));
+window.bcProductionTaskRefresh=async()=>{await bcCoreLoadJobs();await bcProdLoad();if(page==='tasks')render()};
+window.bcProductionTaskStatus=async(jobId,stageId,status)=>{
+ const j=bcCoreJobs.find(x=>String(x.id)===String(jobId));
+ const stage=bcProdStages.find(x=>x.id===stageId);
+ if(!j||!stage)return alert('Production assignment not found. Refresh and try again.');
+ const old=bcProdEntries.find(x=>x.job_id===jobId&&x.stage_id===stageId);
+ try{
+  await bcJobsRequest({action:'productionSaveEntry',id:jobId,stageId,status,employeeId:old?.employee_id||'',assignedTo:old?.assigned_to||'',targetDate:old?.target_date||null,completedDate:status==='Completed'?(old?.completed_date||new Date().toISOString().slice(0,10)):null,notes:old?.notes||''});
+  await bcCoreLoadJobs();await bcProdLoad();render();
+ }catch(err){alert('Unable to update production task: '+String(err.message||err));await bcProdLoad();render()}
+};
+window.bcProductionOpenJob=id=>{selectedJob=String(id);navigate('production')};
 const e=s=>esc(s);
 const statusNames=['Not Started','In Progress','Completed','On Hold'];
 const activeJobs=()=>bcCoreJobs.filter(j=>['Ready for Production','In Production','Completed','Closed'].includes(j.status));
@@ -1922,7 +1952,7 @@ render=function(){
  }
 };
 const oldNavigate=navigate;
-navigate=function(p){if(p==='production'||p==='production-settings'){page=p;search='';render();if(!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs().then(()=>{if(page==='production')render()});bcProdLoad();return}oldNavigate(p)};
+navigate=function(p){if(p==='tasks'){oldNavigate(p);bcProdLoad();bcCoreLoadJobs();return}if(p==='production'||p==='production-settings'){page=p;search='';render();if(!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs().then(()=>{if(page==='production')render()});bcProdLoad();return}oldNavigate(p)};
 })();
 </script>
 </body></html>
