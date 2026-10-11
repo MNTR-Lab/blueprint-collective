@@ -329,4 +329,50 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  apply();
 })();
 </script>
+
+<style>
+.employee-unread-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#cf243c;vertical-align:middle;margin-left:8px;box-shadow:0 0 0 3px #fff0f2}
+.employee-unread-label{font-size:11px;color:#aa1b32;font-weight:700;margin-left:6px}
+</style>
+<script id="employee-job-task-notification-dots">
+(function(){
+ let unread=new Set(),jobIds=new Set(),busy=false;
+ const dot=()=>'<span class="employee-unread-dot" title="Unread task notification" aria-label="Unread task notification"></span>';
+ function paint(){
+  document.querySelectorAll('#rows tr').forEach(tr=>{
+   const select=tr.querySelector('select[data-task]');if(!select)return;
+   const cell=tr.cells[0];if(!cell)return;
+   cell.querySelectorAll('.employee-unread-dot').forEach(x=>x.remove());
+   if(unread.has(String(select.dataset.task)))cell.insertAdjacentHTML('beforeend',dot());
+  });
+  document.querySelectorAll('#jobcards [data-job]').forEach(button=>{
+   const card=button.parentElement;if(!card)return;
+   card.querySelectorAll('.employee-unread-dot').forEach(x=>x.remove());
+   if(jobIds.has(String(button.dataset.job))){
+    const heading=card.querySelector('strong');if(heading)heading.insertAdjacentHTML('beforeend',dot());
+   }
+  });
+ }
+ async function update(){
+  if(busy)return;busy=true;
+  try{
+   const [notifications,tasks]=await Promise.all([call('notifications_list'),call('my_tasks')]);
+   unread=new Set((notifications.items||[]).filter(n=>!n.read_at&&n.task_id).map(n=>String(n.task_id)));
+   jobIds=new Set((tasks.tasks||[]).filter(t=>unread.has(String(t.id))).map(t=>String(t.job_id)));
+   paint();
+  }catch(e){console.warn('Unable to refresh job/task notification dots',e)}
+  finally{busy=false}
+ }
+ window.bcRefreshJobTaskNotificationDots=update;
+ const previousRefresh=refreshEmployeeNotifications;
+ refreshEmployeeNotifications=async function(){const result=await previousRefresh();await update();return result};
+ const originalLoad=load;
+ load=async function(){await originalLoad();paint()};
+ const jobs=document.getElementById('jobcards'),rows=document.getElementById('rows');
+ for(const root of [jobs,rows])if(root)new MutationObserver(()=>paint()).observe(root,{childList:true,subtree:false});
+ setTimeout(update,1200);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});
+ setInterval(()=>{if(!document.hidden)update()},60000);
+})();
+</script>
 </body></html>
