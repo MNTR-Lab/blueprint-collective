@@ -1336,7 +1336,7 @@ bcOpenInboxMessage=function(id){bcEmailLinkFeedback='';bcOpenInboxMessageBeforeL
 
 /* Blueprint Collective Jobs & Projects: Blueprint is the sole editing interface. */
 let bcCoreJobs=[],bcJobsBusy=false,bcJobsError='',bcJobClientFilter='',bcJobEditing='',bcJobFormOpen=false,bcJobsLoaded=false;
-const bcCoreJobStatuses=['New','In Progress','Awaiting Approval','Ready for Production','In Production','Completed','Closed'];
+const bcCoreJobStatuses=['New','In Progress','Awaiting Approval','Ready for Production','In Production','Production Complete','Completed','Closed'];
 async function bcJobsRequest(payload){
  if(!bcSession?.access_token)throw Error('Please log in again');
  if(bcSession.expires_at&&Date.now()/1000>bcSession.expires_at-60)await bcRefreshSession();
@@ -1379,7 +1379,9 @@ function bcJobsPage(){
  const list=bcCoreJobs.filter(j=>(!bcJobClientFilter||String(j.client_external_id)===bcJobClientFilter)&&(bcJobsArchiveTab==='completed'?['Completed','Closed'].includes(j.status):!['Completed','Closed'].includes(j.status)));
  const editing=bcCoreJobs.find(j=>j.id===bcJobEditing);
  const opt=bcClients.map(c=>'<option value="'+esc(c.id)+'" '+(String(c.id)===String(editing?.client_external_id||bcJobClientFilter)?'selected':'')+'>'+esc(c.name)+'</option>').join('');
- const statuses=bcCoreJobStatuses.map(st=>'<option value="'+esc(st)+'" '+(editing?.status===st?'selected':'')+'>'+esc(st)+'</option>').join('');
+ const availableStatuses=editing?.status==='Production Complete'?['Production Complete','Completed']:editing?.status==='Completed'?['Completed','Closed']:editing?.status==='Closed'?['Closed']:bcCoreJobStatuses.filter(st=>!['Production Complete','Completed','Closed'].includes(st));
+ if(editing?.status&&!availableStatuses.includes(editing.status))availableStatuses.unshift(editing.status);
+ const statuses=availableStatuses.map(st=>'<option value="'+esc(st)+'" '+(editing?.status===st?'selected':'')+'>'+esc(st)+'</option>').join('');
  const form=bcJobFormOpen?'<section class="panel" style="margin:14px 0"><h3>'+(editing?'Edit Job':'Create New Job')+'</h3><form onsubmit="bcJobSubmit(event)" style="display:grid;gap:12px;max-width:720px">'+
  '<label>Client<select name="clientId" required '+(editing?'disabled':'')+' style="width:100%;padding:10px"><option value="">Select a client</option>'+opt+'</select></label>'+
  '<label>Job Title<input name="title" required maxlength="200" style="width:100%;padding:10px" value="'+esc(editing?.title||'')+'"></label>'+
