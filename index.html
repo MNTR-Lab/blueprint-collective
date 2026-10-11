@@ -2062,4 +2062,51 @@ setTimeout(()=>{if(bcSession)bcLoadProductionAlerts()},2000);
 setInterval(()=>{if(bcSession&&!document.hidden)bcLoadProductionAlerts()},30000);
 </script>
 
+
+<script>
+/* Blueprint Collective live operations dashboard. Uses existing authenticated CRM data. */
+(function(){
+ let loading=false,loadedAt=0,error='';
+ const safe=v=>esc(String(v==null?'':v));
+ const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+ const isOpen=t=>t.status!=='Completed'&&t.status!=='Cancelled';
+ async function load(force=false){
+  if(!bcSession||loading)return;
+  if(!force&&Date.now()-loadedAt<60000)return;
+  loading=true;error='';if(page==='dashboard')render();
+  const results=await Promise.allSettled([bcCoreLoadJobs(),bcCall('job_tasks_all'),bcJobsRequest({action:'notificationStatus'})]);
+  if(results[1].status==='fulfilled'){bcAllTasks=results[1].value.items||[];bcTaskJobs=results[1].value.jobs||[];}
+  if(results[2].status==='fulfilled'){bcUnresolvedJobIds=(results[2].value.unresolvedJobs||[]).map(String);}
+  if(results.some(r=>r.status==='rejected'))error='Some dashboard information could not be refreshed. Use Refresh to try again.';
+  loadedAt=Date.now();loading=false;if(page==='dashboard')render();
+ }
+ window.bcDashboardRefresh=()=>load(true);
+ const oldNavigate=navigate;
+ navigate=function(p){oldNavigate(p);if(p==='dashboard')load()};
+ const oldDashboard=dashboard;
+ dashboard=function(){
+  if(!bcSession)return '<section class="panel"><h2>Dashboard</h2><p class="muted">Sign in to see your workspace.</p></section>';
+  const jobs=Array.isArray(bcCoreJobs)?bcCoreJobs:[],tasks=Array.isArray(bcAllTasks)?bcAllTasks:[];
+  const active=jobs.filter(j=>!['Completed','Closed'].includes(j.status));
+  const completed=jobs.filter(j=>['Completed','Closed'].includes(j.status));
+  const prod=jobs.filter(j=>j.status==='In Production');
+  const waiting=jobs.filter(j=>j.status==='Awaiting Approval');
+  const overdue=tasks.filter(t=>isOpen(t)&&t.due_date&&t.due_date<today());
+  const openTasks=tasks.filter(isOpen);
+  const attention=new Set([...(bcUnresolvedJobIds||[]),...(bcUnreadApprovedJobIds||[])].map(String));
+  const cards=[['Active Jobs',active.length,'jobs'],['In Production',prod.length,'production'],['Pending Approval',waiting.length,'jobs'],['Open Tasks',openTasks.length,'tasks'],['Overdue Tasks',overdue.length,'tasks'],['Completed Jobs',completed.length,'jobs']];
+  const cardHtml=cards.map(([name,count,target])=>'<button class="card" style="text-align:left;cursor:pointer" onclick="navigate(\''+target+'\')"><div class="label">'+name+'</div><div class="value">'+count+'</div><div class="foot">View '+(target==='production'?'production':target==='tasks'?'tasks':'jobs')+' →</div></button>').join('');
+  const jobRows=active.slice().sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||''))).slice(0,7).map(j=>'<tr><td><b>'+safe(j.job_number)+'</b></td><td>'+safe(j.title)+'</td><td>'+safe(j.client_name)+'</td><td>'+safe(j.status)+(attention.has(String(j.id))?' · Attention':'')+'</td></tr>').join('');
+  const taskRows=openTasks.slice().sort((a,b)=>(a.due_date||'9999').localeCompare(b.due_date||'9999')).slice(0,6).map(t=>'<tr><td>'+safe(t.title)+'</td><td>'+safe(t.status)+'</td><td>'+safe(t.due_date||'—')+'</td></tr>').join('');
+  return '<div class="heading"><div><h2>Business Overview</h2><p>Live job and task activity for the selected Blueprint Collective workspace.</p></div><button class="btn secondary" onclick="bcDashboardRefresh()">Refresh Dashboard</button></div>'+
+  bcRevenueSummaryCard()+
+  (loading?'<p class="muted">Updating dashboard…</p>':'')+(error?'<div class="alert">'+safe(error)+'</div>':'')+
+  '<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">'+cardHtml+'</div>'+
+  '<div class="twocol"><section class="panel"><h3>Active Jobs</h3><div class="tablewrap"><table><thead><tr><th>Job #</th><th>Job</th><th>Client</th><th>Status</th></tr></thead><tbody>'+(jobRows||'<tr><td colspan="4">No active jobs</td></tr>')+'</tbody></table></div><button class="btn secondary" onclick="navigate(\'jobs\')">View Jobs & Projects →</button></section>'+
+  '<section class="panel"><h3>Tasks Requiring Attention</h3><p class="muted">'+overdue.length+' overdue · '+openTasks.length+' open</p><div class="tablewrap"><table><thead><tr><th>Task</th><th>Status</th><th>Due</th></tr></thead><tbody>'+(taskRows||'<tr><td colspan="3">No open tasks</td></tr>')+'</tbody></table></div><button class="btn secondary" onclick="navigate(\'tasks\')">View Tasks & Activities →</button></section></div>'+
+  '<section class="panel"><h3>Production & Approvals</h3><p>'+prod.length+' job(s) in production · '+waiting.length+' awaiting approval · '+attention.size+' job(s) with approval-related attention</p><button class="btn secondary" onclick="navigate(\'production\')">Open Production Management →</button> <button class="btn secondary" onclick="navigate(\'jobs\')">Review Jobs →</button></section>';
+ };
+ if(page==='dashboard')load();
+})();
+</script>
 </body></html>
