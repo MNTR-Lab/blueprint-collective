@@ -3188,18 +3188,8 @@ render=function(){
   busy=true;
   try{
    if(typeof bcExpandTaskTables==='function')bcExpandTaskTables();
-   document.querySelectorAll('section.bc-core-all-tasks .bc-task-expand-item, .bc-core-job-tasks .bc-task-expand-item').forEach(card=>{
-    const open=card.querySelector('.bc-task-expand-actions button[onclick*="bcDetailOpen"]');
-    if(!open||card.querySelector('button[data-bc-task-notes]'))return;
-    const match=open.getAttribute('onclick')?.match(/bcDetailOpen\(("[^"]+"|'[^']+')\)/);
-    if(!match)return;
-    let jobId;try{jobId=JSON.parse(match[1].replace(/^'/,'"').replace(/'$/,'"'));}catch{return;}
-    const title=card.querySelector('.bc-task-expand-heading strong')?.textContent.trim();
-    const task=(typeof bcCoreJobTasks!=='undefined'?bcCoreJobTasks:[]).find(t=>String(t.job_id)===String(jobId)&&t.title===title);
-    if(!task)return;
-    const button=document.createElement('button');button.type='button';button.className='btn secondary';button.dataset.bcTaskNotes=task.id;button.textContent='Task Notes';
-    button.onclick=()=>bcTaskNotesOpen(task.id);open.before(button);
-   });
+   // Task Notes is already rendered by bcCoreTaskRow; do not insert another button.
+
   }finally{busy=false;}
  }
  const root=document.getElementById('view');
