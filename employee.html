@@ -268,4 +268,65 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
  document.addEventListener('click',e=>{if(e.target.closest('#bcUnreadMessageShortcut'))openForNavigation('employee-messages')},true);
  const hash=location.hash.slice(1);if(hash)openForNavigation(hash);
 })();
-</script></body></html>
+</script>
+<style>
+.employee-task-tools{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0 16px}
+.employee-task-tools button{border:1px solid #d9e3ed;background:#fff;color:#18334e;border-radius:9px;padding:10px 14px;font-weight:650;cursor:pointer}
+.employee-task-tools button[aria-pressed="true"]{background:#eaf2fb;border-color:#4078b2}
+.employee-task-tools .task-filter-count{display:inline-block;background:#e9eef5;padding:2px 7px;border-radius:12px;margin-left:5px}
+.employee-task-overdue{color:#b42318;font-weight:700}
+.employee-task-due-soon{color:#a66300;font-weight:700}
+</style>
+<script>
+(function(){
+ const section=document.getElementById('employee-tasks');
+ const tbody=document.getElementById('rows');
+ if(!section||!tbody)return;
+ const tools=document.createElement('div');
+ tools.className='employee-task-tools';
+ tools.setAttribute('aria-label','Filter assigned tasks');
+ const choices=[['all','All Tasks'],['action','Needs Action'],['overdue','Overdue'],['completed','Completed']];
+ let selected='all';
+ const counts={all:0,action:0,overdue:0,completed:0};
+ for(const [key,label] of choices){
+  const b=document.createElement('button');b.type='button';b.dataset.filter=key;
+  b.setAttribute('aria-pressed',String(key===selected));
+  b.innerHTML=label+' <span class="task-filter-count" data-count="'+key+'">0</span>';
+  b.onclick=()=>{selected=key;apply()};
+  tools.appendChild(b);
+ }
+ const status=document.getElementById('status');
+ status.parentNode.insertBefore(tools,status.nextSibling);
+ const today=new Date();today.setHours(0,0,0,0);
+ function apply(){
+  const rows=[...tbody.querySelectorAll('tr')].filter(tr=>tr.querySelector('[data-task]'));
+  for(const k in counts)counts[k]=0;
+  rows.forEach(tr=>{
+   const select=tr.querySelector('[data-task]');
+   const state=select.value;
+   const dueCell=tr.cells[1];
+   const raw=dueCell?.textContent.trim()||'';
+   const parsed=/^\d{4}-\d{2}-\d{2}$/.test(raw)?new Date(raw+'T00:00:00'):null;
+   const overdue=!!parsed&&!Number.isNaN(parsed.getTime())&&parsed<today&&state!=='Completed';
+   const action=state!=='Completed';
+   counts.all++;if(action)counts.action++;if(overdue)counts.overdue++;if(!action)counts.completed++;
+   const show=selected==='all'||(selected==='action'&&action)||(selected==='overdue'&&overdue)||(selected==='completed'&&!action);
+   tr.style.display=show?'':'none';
+   if(dueCell){dueCell.classList.toggle('employee-task-overdue',overdue);dueCell.title=overdue?'Overdue task':'';}
+  });
+  for(const b of tools.querySelectorAll('[data-filter]'))b.setAttribute('aria-pressed',String(b.dataset.filter===selected));
+  for(const c of tools.querySelectorAll('[data-count]'))c.textContent=counts[c.dataset.count];
+  const old=tbody.querySelector('.employee-task-empty-filter');if(old)old.remove();
+  if(rows.length&&!rows.some(tr=>tr.style.display!=='none')){
+   const tr=document.createElement('tr');tr.className='employee-task-empty-filter';
+   tr.innerHTML='<td colspan="4" style="padding:18px;color:#64748b">No tasks match this filter.</td>';
+   tbody.appendChild(tr);
+  }
+ }
+ let queued=false;
+ new MutationObserver(()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;apply()})}).observe(tbody,{childList:true,subtree:false});
+ tbody.addEventListener('change',e=>{if(e.target.matches('[data-task]'))apply()});
+ apply();
+})();
+</script>
+</body></html>
