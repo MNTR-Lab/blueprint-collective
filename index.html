@@ -1866,7 +1866,7 @@ function bcFulfillmentPanel(job){
  const carrier=bcGuessCarrier(f.tracking_number||'');
  return '<section class="bc-prod-panel" style="margin-top:18px">'+
  '<div class="bc-prod-head"><div><h3>Delivery &amp; Fulfillment</h3><p class="muted">Manage shipment, pickup, and customer delivery details for this job.</p></div><span class="status green">'+e(f.status||'Pending')+'</span></div>'+
- '<div class="bc-prod-note"><b>Client notification:</b> '+e(f.notification_status||'Not Sent')+' · Automatic emails will be enabled after an email service is connected.</div>'+
+ '<div class="bc-prod-note"><b>Client notification:</b> '+e(f.notification_status||'Not Sent')+' · Shipping notifications are sent through the configured email service. Check this status after saving.</div>'+
  '<div class="bc-prod-stages">'+
  '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>1. Fulfillment details</b><span class="muted">Order delivery</span></div>'+
  '<label>Delivery method</label><select id="bcFulfillMethod">'+option(['Shipping','Pickup','Local Delivery'],f.method||'Shipping')+'</select>'+
@@ -1882,7 +1882,7 @@ window.bcFulfillmentSave=async jobId=>{
  try{
   const r=await bcJobsRequest({action:'fulfillmentSave',jobId,method:v('bcFulfillMethod'),status:v('bcFulfillStatus'),carrier:bcGuessCarrier(v('bcFulfillTracking')).name==='UPS'?'UPS':bcGuessCarrier(v('bcFulfillTracking')).name==='USPS (likely)'?'USPS':'',trackingNumber:v('bcFulfillTracking'),trackingUrl:bcGuessCarrier(v('bcFulfillTracking')).url,recipientEmail:v('bcFulfillEmail')});
   await bcProdLoad();
-  alert('Fulfillment saved. Customer email has not been sent; email integration is the next step.');
+  alert(r.message||'Fulfillment saved.');
  }catch(err){alert('Unable to save fulfillment: '+String(err.message||err))}
 };
 function productionPage(){
