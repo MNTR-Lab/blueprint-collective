@@ -1374,7 +1374,7 @@ bcJobsPage=function(){
  const fileName=id=>docs.find(d=>d.id===id)?.filename||'Document';
  const approvalRows=approvals.map(a=>{
  const status=h(a.status),pending=a.status==='Pending Approval';
- const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button> <button class="btn" onclick="bcJobClientLink(\''+a.id+'\')">Client Approval Link</button> <button class="btn secondary" onclick="bcJobRevokeClientLink(\''+a.id+'\')">Revoke Links</button>':'';
+ const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button> <button class="btn" onclick="bcJobClientLink(\''+a.id+'\',true)">Send Approval Request</button> <button class="btn secondary" onclick="bcJobClientLink(\''+a.id+'\')">Client Approval Link</button> <button class="btn secondary" onclick="bcJobRevokeClientLink(\''+a.id+'\')">Revoke Links</button>':'';
  return '<div class="bc-workflow-record"><div><strong>'+h(fileName(a.document_id))+'</strong><div class="muted">'+status+' · '+new Date(a.requested_at).toLocaleString()+'</div>'+(a.review_note?'<p>'+h(a.review_note)+'</p>':'')+'</div><div>'+actions+'</div></div>';
  }).join('');
  const revisionRequests=approvals.filter(a=>a.status==='Changes Requested'&&a.revision_status==='Needs Revision');
@@ -1432,16 +1432,37 @@ async function bcJobReview(approvalId,status){
  try{await bcJobsRequest({action:'reviewApproval',id:bcDetailJobId,approvalId,status,note:note.trim()});await bcDetailReload()}
  catch(err){alert('Unable to save decision: '+err.message)}
 }
-async function bcJobClientLink(approvalId){
- const email=prompt('Client email (optional; for your reference when sharing the link):','');
+async function bcJobClientLink(approvalId,sendEmail=false){
+ const email=prompt(sendEmail?'Client email address to send the approval request:':'Client email (optional; for your reference when sharing the link):','');
  if(email===null)return;
+ const recipient=email.trim().toLowerCase();
+ if(sendEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)){alert('Enter a valid client email address.');return}
+ if(sendEmail&&!confirm('Send a document approval request to '+recipient+'?'))return;
  try{
-  const data=await bcJobsRequest({action:'createClientApprovalLink',id:bcDetailJobId,approvalId,recipientEmail:email.trim()});
+  const data=await bcJobsRequest({action:'createClientApprovalLink',id:bcDetailJobId,approvalId,recipientEmail:recipient});
   const url=data.url;
-  const modal=document.createElement('div');modal.id='bc-client-link-dialog';modal.className='bc-doc-viewer';
-  modal.innerHTML='<div class="bc-doc-viewer-panel" style="max-width:580px;height:auto;padding:24px" role="dialog" aria-modal="true"><h3>Client Approval Link</h3><p>Share this secure link with your client. It expires after 14 days. Anyone with the link can review and respond, so send it privately.</p><input id="bc-client-link-url" readonly style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px" /><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" onclick="bcCopyClientLink()">Copy Link</button><button class="btn secondary" onclick="document.getElementById(\'bc-client-link-dialog\')?.remove()">Close</button></div></div>';
-  document.body.appendChild(modal);document.getElementById('bc-client-link-url').value=url;
- }catch(e){alert('Unable to create client link: '+e.message)}
+  if(sendEmail){
+   const job=bcDetailData?.job||bcCoreJobs.find(x=>x.id===bcDetailJobId)||{};
+   const approval=(bcDetailData?.approvals||[]).find(a=>a.id===approvalId);
+   const doc=(bcDetailData?.documents||[]).find(d=>d.id===approval?.document_id);
+   const subject='Document Approval Requested - '+(job.job_number||'Blueprint Collective');
+   const body='Hello,\n\nA document is ready for your review and approval.\n\nJob: '+(job.job_number||'')+'\n'+(job.title||'')+'\nDocument: '+(doc?.filename||'Document')+'\n\nReview the document and select Approve Document or Request Changes using this secure link:\n'+url+'\n\nThis link expires in 14 days. Please do not forward it.\n\nThank you,\nBlueprint Collective';
+   try{
+    await bcOutgoingRequest('send',{to:recipient,subject,body});
+    alert('Approval request emailed successfully to '+recipient+'.');
+   }catch(sendError){
+    bcShowClientApprovalLink(url,'Email could not be sent: '+sendError.message+'. Copy the link to send manually.');
+   }
+   return;
+  }
+  bcShowClientApprovalLink(url,'Share this secure link with your client. It expires after 14 days. Anyone with the link can review and respond, so send it privately.');
+ }catch(e){alert('Unable to create client approval request: '+e.message)}
+}
+function bcShowClientApprovalLink(url,message){
+ document.getElementById('bc-client-link-dialog')?.remove();
+ const modal=document.createElement('div');modal.id='bc-client-link-dialog';modal.className='bc-doc-viewer';
+ modal.innerHTML='<div class="bc-doc-viewer-panel" style="max-width:580px;height:auto;padding:24px" role="dialog" aria-modal="true"><h3>Client Approval Link</h3><p id="bc-client-link-message"></p><input id="bc-client-link-url" readonly style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px" /><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" onclick="bcCopyClientLink()">Copy Link</button><button class="btn secondary" onclick="document.getElementById(\'bc-client-link-dialog\')?.remove()">Close</button></div></div>';
+ document.body.appendChild(modal);document.getElementById('bc-client-link-url').value=url;document.getElementById('bc-client-link-message').textContent=message;
 }
 async function bcCopyClientLink(){
  const input=document.getElementById('bc-client-link-url');if(!input)return;
