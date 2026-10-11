@@ -2539,4 +2539,71 @@ const bcNoticeOldLoad=bcLoadInbox;
 bcLoadInbox=async function(){await bcNoticeOldLoad();await bcNoticeRefresh()};
 setTimeout(bcNoticeRefresh,3500);
 </script>
+
+<script>
+/* Client/job correspondence integration: use existing panels and stored links. */
+let bcThreadLinkBusy=false,bcThreadLinkNotice='';
+function bcThreadIncoming(m){
+ return bcInboxMessages.filter(x=>bcMailThreadKey(x)===bcMailThreadKey(m));
+}
+async function bcThreadLinkClient(messageId){
+ const m=bcInboxMessages.find(x=>String(x.id)===String(messageId));
+ const clientId=document.getElementById('bcEmailClientSelect')?.value||'';
+ if(!m||!clientId){alert('Choose a client before linking the conversation.');return}
+ if(!bcClients.some(c=>String(c.id)===clientId)){alert('Client not found.');return}
+ const items=bcThreadIncoming(m);
+ bcThreadLinkBusy=true;bcThreadLinkNotice='';render();
+ let saved=0;
+ try{
+  for(const item of items){
+   const result=await bcMailJobRequest('link',{messageId:String(item.id),clientId});
+   item.linked_client_external_id=result.message.linked_client_external_id;saved++;
+  }
+  bcThreadLinkNotice='Linked '+saved+' incoming message(s) to the client.';
+ }catch(e){bcThreadLinkNotice='Linked '+saved+' message(s); remaining messages were not linked: '+(e.message||e)}
+ finally{bcThreadLinkBusy=false;render()}
+}
+async function bcThreadLinkJob(messageId){
+ const m=bcInboxMessages.find(x=>String(x.id)===String(messageId));
+ const jobId=document.getElementById('bcMailJobSelect')?.value;
+ if(!m||!jobId){alert('Choose a job before linking the conversation.');return}
+ const job=bcCoreJobs.find(x=>String(x.id)===String(jobId));
+ if(!job){alert('Job not found.');return}
+ const items=bcThreadIncoming(m);
+ bcThreadLinkBusy=true;bcThreadLinkNotice='';render();
+ let saved=0;
+ try{
+  for(const item of items){
+   await bcMailJobRequest('linkJob',{emailId:String(item.id),jobId});saved++;
+  }
+  const result=await bcMailJobRequest('jobLinks');bcMailJobLinks=result.links||[];
+  bcThreadLinkNotice='Linked '+saved+' incoming message(s) to '+(job.job_number||job.title||'the job')+'.';
+ }catch(e){bcThreadLinkNotice='Linked '+saved+' message(s); remaining messages were not linked: '+(e.message||e)}
+ finally{bcThreadLinkBusy=false;render()}
+}
+function bcThreadOpenJob(jobId){
+ if(!bcCoreJobs.some(x=>String(x.id)===String(jobId))){alert('Job is not loaded. Open Jobs & Projects first.');return}
+ navigate('jobs');
+ bcDetailOpen(jobId);
+}
+const bcThreadIntegrationOldDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ let html=bcThreadIntegrationOldDetail(m);if(!m)return html;
+ const count=bcThreadIncoming(m).length;
+ const clientButton='<button type="button" class="btn secondary" '+(bcThreadLinkBusy?'disabled':'')+' onclick="bcThreadLinkClient(\''+bcInboxEscape(m.id)+'\')">Link Conversation to Client ('+count+')</button>';
+ const jobButton='<button type="button" class="btn secondary" '+(bcThreadLinkBusy?'disabled':'')+' onclick="bcThreadLinkJob(\''+bcInboxEscape(m.id)+'\')">Link Conversation to Job ('+count+')</button>';
+ html=html.replace(/(<button class="btn secondary"[^>]*>Save Link<\/button>)/,'$1 '+clientButton);
+ html=html.replace(/(<button class="btn"[^>]*>Save Job Link<\/button>)/,'$1 '+jobButton);
+ const linked=bcMailJobLinks.find(x=>bcThreadIncoming(m).some(y=>String(y.id)===String(x.email_id)));
+ const job=bcCoreJobs.find(x=>String(x.id)===String(linked?.job_id));
+ if(job){
+  const open='<div style="margin-top:10px"><button class="btn secondary" type="button" onclick="bcThreadOpenJob(\''+bcInboxEscape(job.id)+'\')">Open Linked Job: '+bcInboxEscape(job.job_number||job.title||'Job')+'</button></div>';
+  html=html.replace('<h4>Associated Job</h4>','<h4>Associated Job</h4>'+open);
+ }
+ if(bcThreadLinkNotice)html+='<p class="notice">'+bcInboxEscape(bcThreadLinkNotice)+'</p>';
+ return html;
+};
+const bcThreadIntegrationOldOpen=bcOpenInboxMessage;
+bcOpenInboxMessage=function(id){bcThreadLinkNotice='';return bcThreadIntegrationOldOpen(id)};
+</script>
 </body></html>
