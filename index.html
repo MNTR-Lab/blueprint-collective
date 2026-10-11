@@ -1337,8 +1337,24 @@ async function bcDetailOpen(id){
  bcDetailJobId=id;bcDetailBusy=true;bcDetailError='';bcDetailData=null;render();
  await bcDetailReload();
 }
+async function bcSyncApprovalJobStatus(detail){
+ // Front-end reconciliation. The blueprint-jobs backend should also perform
+ // these transitions when a client submits a decision through a secure link.
+ const job=detail?.job, approvals=detail?.approvals||[];
+ if(!job||!approvals.length||['Completed','Closed','Cancelled','In Production'].includes(job.status))return detail;
+ const ordered=[...approvals].sort((a,b)=>new Date(b.updated_at||b.reviewed_at||b.created_at||0)-new Date(a.updated_at||a.reviewed_at||a.created_at||0));
+ const latest=ordered[0];if(!latest)return detail;
+ let target='';
+ if(latest.status==='Pending Approval'||latest.status==='Changes Requested')target='Awaiting Approval';
+ else if(latest.status==='Approved'&&job.status==='Awaiting Approval')target='Ready for Production';
+ if(!target||job.status===target)return detail;
+ await bcJobsRequest({action:'update',id:job.id||bcDetailJobId,status:target});
+ detail.job={...job,status:target};
+ const cached=bcCoreJobs.find(x=>String(x.id)===String(job.id||bcDetailJobId));if(cached)cached.status=target;
+ return detail;
+}
 async function bcDetailReload(){
- try{const r=await bcJobsRequest({action:'details',id:bcDetailJobId});bcDetailData=r;bcDetailError='';}
+ try{const r=await bcJobsRequest({action:'details',id:bcDetailJobId});bcDetailData=r;bcDetailError='';try{await bcSyncApprovalJobStatus(r)}catch(syncErr){console.warn('Approval status sync:',syncErr.message)}}
  catch(e){bcDetailError=e.message||String(e);}
  finally{bcDetailBusy=false;render();}
 }
@@ -1476,7 +1492,7 @@ bcJobsPage=function(){
  const approvalNotice=recentApproved?'<div style="padding:12px 15px;margin:10px 0;border:1px solid #a7dec3;background:#effbf4;border-radius:9px;color:#146c43"><strong>✓ Client Approved: '+h(fileName(recentApproved.document_id))+'</strong><div style="font-size:12px;margin-top:4px">Approved '+h(new Date(recentApproved.reviewed_at).toLocaleString())+'</div></div>':'';
  const currentJob=bcDetailData.job||{};
  const statusOptions=bcCoreJobStatuses.map(st=>'<option value="'+h(st)+'" '+(currentJob.status===st?'selected':'')+'>'+h(st)+'</option>').join('');
- const productionControls='<section class="bc-workflow-box" style="margin-bottom:14px"><div class="bc-workflow-title"><h3>Production Status</h3></div><p class="muted">Client approval does not automatically change production status. Update this manually when the job is ready.</p><form onsubmit="bcJobUpdateProductionStatus(event)" style="display:flex;align-items:end;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:180px">Job Status<select name="status" style="width:100%;padding:10px">'+statusOptions+'</select></label><button type="submit" class="btn">Save Status</button></form></section>';
+ const productionControls='<section class="bc-workflow-box" style="margin-bottom:14px"><div class="bc-workflow-title"><h3>Production Status</h3></div><p class="muted">Approval workflow updates the job status automatically when the CRM synchronizes. You may also change the status manually.</p><form onsubmit="bcJobUpdateProductionStatus(event)" style="display:flex;align-items:end;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:180px">Job Status<select name="status" style="width:100%;padding:10px">'+statusOptions+'</select></label><button type="submit" class="btn">Save Status</button></form></section>';
  const approvalHtml=productionControls+approvalNotice+'<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (eligibleDocs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p class="muted">No documents awaiting approval. Upload a new document to request approval.</p>')+
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
