@@ -610,4 +610,55 @@ body[class*="bc-view-"] #workspace>div:first-of-type{margin-bottom:15px}
  setTimeout(refreshDashboard,1300);
 })();
 </script>
+
+<script id="bc-dashboard-overview-first">
+(function(){
+ const home=document.getElementById('bcDashboardHome');
+ const workspace=document.getElementById('workspace');
+ if(!home||!workspace)return;
+ const heading=workspace.querySelector(':scope > div[style*="display:flex"]');
+ const metrics=workspace.querySelector(':scope > .grid');
+ if(heading){home.insertBefore(heading,home.firstChild);heading.classList.add('bc-dashboard-overview-heading')}
+ if(metrics){heading?heading.after(metrics):home.insertBefore(metrics,home.firstChild);metrics.classList.add('bc-dashboard-metrics')}
+ const panel=home.querySelector('.bc-dashboard-panel');
+ if(panel){
+  const archived=document.createElement('details');archived.id='bcDashArchived';archived.className='bc-dashboard-archived';
+  archived.innerHTML='<summary>Archived Notifications (<span id="bcDashArchivedCount">0</span>)</summary><div id="bcDashArchivedList"></div>';
+  panel.appendChild(archived);
+ }
+ async function updateArchive(){
+  if(workspace.classList.contains('hide'))return;
+  try{
+   const response=await call('notifications_list');const notifications=response.items||[];
+   const unread=notifications.filter(n=>!n.read_at),read=notifications.filter(n=>!!n.read_at);
+   const recent=document.getElementById('bcDashActivity');
+   const alert=document.getElementById('bcDashAlerts');
+   if(alert)alert.textContent=unread.length?unread.length+' unread notification'+(unread.length===1?'':'s'):'All caught up';
+   if(recent){recent.innerHTML=unread.slice(0,5).map(n=>'<div class="bc-dashboard-activity"><strong>'+esc(n.title||'Notification')+'</strong><div>'+esc(n.message||'')+'</div><button type="button" class="bc-dashboard-action" data-go-notification="'+esc(n.id)+'">Open Notification</button></div>').join('')||'<p>No unread notifications.</p>';}
+   const count=document.getElementById('bcDashArchivedCount');if(count)count.textContent=String(read.length);
+   const list=document.getElementById('bcDashArchivedList');if(list)list.innerHTML=read.map(n=>'<div class="bc-dashboard-activity"><strong>'+esc(n.title||'Notification')+'</strong><div>'+esc(n.message||'')+'</div><small>Read '+esc(new Date(n.read_at).toLocaleString())+'</small></div>').join('')||'<p>No archived notifications yet.</p>';
+   recent?.querySelectorAll('[data-go-notification]').forEach(b=>b.onclick=()=>window.bcEmployeeNavigate?.('employee-notifications'));
+  }catch(e){console.warn('Dashboard notification refresh:',e)}
+ }
+ const nav=window.bcEmployeeNavigate;
+ if(typeof nav==='function')window.bcEmployeeNavigate=async function(id,...args){await nav(id,...args);if(id==='employee-dashboard')await updateArchive()};
+ // Refresh the dashboard when a notification is marked read, without modifying the notification workflow.
+ const notifications=document.getElementById('notificationlist');
+ if(notifications)notifications.addEventListener('click',e=>{if(e.target.closest('[data-notification]'))setTimeout(updateArchive,750)},true);
+ document.querySelectorAll('[data-employee-nav="employee-dashboard"]').forEach(a=>a.addEventListener('click',()=>setTimeout(updateArchive,150),true));
+ document.querySelectorAll('#bcDashboardHome [data-go="employee-dashboard"]').forEach(a=>a.addEventListener('click',updateArchive));
+ const refresh=document.getElementById('refresh');refresh?.addEventListener('click',()=>setTimeout(updateArchive,700));
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateArchive()});
+ setTimeout(updateArchive,1300);
+})();
+</script>
+<style id="bc-dashboard-overview-first-css">
+body.bc-view-dashboard #bcDashboardHome>.bc-dashboard-metrics{display:grid!important}
+body[class*="bc-view-"]:not(.bc-view-dashboard) #bcDashboardHome{display:none!important}
+.bc-dashboard-overview-heading{margin-bottom:8px!important}
+.bc-dashboard-metrics{margin:14px 0 22px!important}
+.bc-dashboard-archived{margin-top:20px;padding-top:15px;border-top:1px solid #dce5ee}
+.bc-dashboard-archived summary{cursor:pointer;font-weight:750;color:#19334f;padding:9px 0}
+.bc-dashboard-archived .bc-dashboard-activity{color:#607187}
+</style>
 </body></html>
