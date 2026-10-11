@@ -2487,4 +2487,56 @@ bcInboxLayout=function(){
 const bcThreadOldLoadInbox=bcLoadInbox;
 bcLoadInbox=async function(){await bcThreadOldLoadInbox();await bcThreadLoad()};
 </script>
+
+<script>
+/* Step 4 completion: actionable email notification dots */
+let bcNoticeBaseline=null,bcNoticePending=new Set(),bcNoticeLoading=false;
+async function bcNoticeRefresh(){
+ if(bcNoticeLoading||!bcSession?.access_token)return;
+ bcNoticeLoading=true;
+ try{
+  const [baseline,mail,states]=await Promise.all([
+   bcMailJobRequest('notificationBaseline'),
+   bcMailJobRequest('list'),
+   bcMailJobRequest('threadState')
+  ]);
+  bcNoticeBaseline=baseline.baseline_at;
+  bcThreadStates=Object.fromEntries((states.states||[]).map(x=>[x.thread_key,x]));
+  bcThreadStaff=states.staff||[];
+  if(mail.messages)bcInboxMessages=mail.messages;
+  const pending=new Set();
+  for(const m of bcInboxMessages){
+   const st=bcThreadCurrent(m);
+   const handled=bcThreadStates[st.key]?.last_handled_at;
+   if(st.status==='Open'&&new Date(m.received_at)>new Date(bcNoticeBaseline)&&(!handled||new Date(m.received_at)>new Date(handled)))pending.add(st.key);
+  }
+  bcNoticePending=pending;
+  bcMailHasNew=pending.size>0;
+  if(page==='email')render();
+  else{
+   const button=[...document.querySelectorAll('#nav button')].find(b=>b.textContent.includes('Email Inbox'));
+   if(button){button.querySelector('.bc-new-mail-dot')?.remove();if(bcMailHasNew){const dot=document.createElement('span');dot.className='bc-new-mail-dot';dot.title='Email conversation needs attention';button.appendChild(dot)}}
+  }
+ }catch(e){console.warn('Email notification refresh unavailable',e)}
+ finally{bcNoticeLoading=false}
+}
+bcMailMarkSeen=function(){}; // Opening the inbox is not handling the conversation.
+bcMailPoll=bcNoticeRefresh;
+const bcNoticeOldLayout=bcInboxLayout;
+bcInboxLayout=function(){
+ let html=bcNoticeOldLayout();
+ if(bcMailTab!=='inbox')return html;
+ return html.replace(/(<button class="bc-mail-item [\s\S]*?<\/button>)/g,row=>{
+  const id=(row.match(/bcOpenInboxMessage\('([^']+)'\)/)||[])[1];
+  const mail=bcInboxMessages.find(x=>String(x.id)===id);
+  if(!mail||!bcNoticePending.has(bcMailThreadKey(mail)))return row;
+  return row.replace(/(<strong>)/,'$1<span class="bc-new-mail-dot" title="Needs attention" style="display:inline-block;margin-right:8px"></span>');
+ });
+};
+const bcNoticeOldSave=bcThreadSave;
+bcThreadSave=async function(id){await bcNoticeOldSave(id);await bcNoticeRefresh()};
+const bcNoticeOldLoad=bcLoadInbox;
+bcLoadInbox=async function(){await bcNoticeOldLoad();await bcNoticeRefresh()};
+setTimeout(bcNoticeRefresh,3500);
+</script>
 </body></html>
