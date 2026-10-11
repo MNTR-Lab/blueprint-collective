@@ -2304,11 +2304,24 @@ bcInboxDetail=function(m){
  const timeline=bcMailUnifiedTimeline(m);
  const cards=timeline.map(x=>'<div style="border-bottom:1px solid #e3e9f0;padding:12px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong>'+(x.kind==='sent'?'↗ Sent':'↙ Received')+'</strong><span class="muted">'+bcInboxEscape(new Date(x.date).toLocaleString())+'</span></div><div style="font-size:12px;margin-top:5px"><b>From:</b> '+bcInboxEscape(x.from)+'<br><b>To:</b> '+bcInboxEscape(x.to)+'</div><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+bcInboxEscape(x.body)+'</p></div>').join('');
  const original=bcMailUnifiedOldDetail(m);
- return '<h3>'+bcInboxEscape(m.subject||'(No subject)')+'</h3><p class="muted">'+timeline.length+' messages · '+timeline.filter(x=>x.kind==='sent').length+' sent · '+timeline.filter(x=>x.kind==='incoming').length+' received</p>'+cards+'<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Message actions &amp; job association</summary><div style="padding-top:12px">'+original+'</div></details>';
+ return '<h3>'+bcInboxEscape(m.subject||'(No subject)')+'</h3><p class="muted">'+timeline.length+' messages · '+timeline.filter(x=>x.kind==='sent').length+' sent · '+timeline.filter(x=>x.kind==='incoming').length+' received</p>'+cards+
+ '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn" onclick="bcReplyIncoming(\\''+bcInboxEscape(m.id)+'\\')">Reply</button><button class="btn secondary" onclick="bcMailReplyAll(\\''+bcInboxEscape(m.id)+'\\')">Reply All</button></div>'+
+ '<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Job association &amp; message details</summary><div style="padding-top:12px">'+original+'</div></details>';
 };
 const bcMailUnifiedPriorLoad=bcLoadInbox;
 bcLoadInbox=async function(){await Promise.all([bcMailUnifiedPriorLoad(),bcLoadSent()])};
 const bcMailUnifiedPriorSend=bcSendCompose;
 bcSendCompose=async function(ev){await bcMailUnifiedPriorSend(ev);if(bcMailTab==='inbox')await bcLoadSent()};
+</script>
+<script>
+function bcMailReplyAll(id){
+ const m=bcInboxMessages.find(x=>String(x.id)===String(id));
+ if(!m)return;
+ // Recipient list is currently single-address only. Do not imply CC support.
+ const to=bcClientEmailAddress(m.sender);
+ const subject=/^re:/i.test(m.subject||'')?m.subject:'Re: '+(m.subject||'(No subject)');
+ const client=bcEmailClientMatch(m);
+ bcOpenCompose(to,subject,'\\n\\n--- Original message ---\\n'+bcEmailBody(m).slice(0,10000),client?.id||null);
+}
 </script>
 </body></html>
