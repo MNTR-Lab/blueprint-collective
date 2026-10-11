@@ -1759,16 +1759,27 @@ render=function(){
    by organization, pending the production database/API integration. */
 (function(){
 const defaults=['Artwork & Design','Materials & Ordering','Production','Quality Control','Delivery & Fulfillment'];
-let selectedJob='';
-const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||business||'default');
-const key=(suffix)=>'bc-prod-preview-v1:'+org()+':'+suffix;
-const read=(suffix,fallback)=>{try{const v=JSON.parse(localStorage.getItem(key(suffix)));return v??fallback}catch(e){return fallback}};
-const write=(suffix,value)=>{try{localStorage.setItem(key(suffix),JSON.stringify(value))}catch(e){alert('Unable to save this browser preview.')}};
-const stages=()=>read('stages',defaults);
-const progress=()=>read('progress',{});
+let selectedJob='',bcProdStages=[],bcProdEntries=[],bcProdLoading=false,bcProdError='';
+const org=()=>String(window.bcSelectedOrganizationId||window.bcOrganizationId||window.bcCurrentOrganizationId||'default');
+const stages=()=>bcProdStages.map(x=>x.name);
+const progress=()=>{
+ const byJob={};
+ for(const r of bcProdEntries){const i=bcProdStages.findIndex(s=>s.id===r.stage_id);if(i<0)continue;(byJob[r.job_id]??={})[i]={status:r.status,assignee:r.assigned_to||'',target:r.target_date||'',completed:r.completed_date||'',notes:r.notes||''};}
+ return byJob;
+};
+async function bcProdLoad(){
+ if(bcProdLoading)return;
+ bcProdLoading=true;bcProdError='';
+ try{
+  let data=await bcJobsRequest({action:'productionLoad'});
+  if(!data.stages?.length){await bcJobsRequest({action:'productionSeed'});data=await bcJobsRequest({action:'productionLoad'});}
+  bcProdStages=data.stages||[];bcProdEntries=data.entries||[];
+ }catch(err){bcProdError=String(err?.message||err);}
+ finally{bcProdLoading=false;if(page==='production'||page==='production-settings')render();}
+}
+const e=s=>esc(s);
 const statusNames=['Not Started','In Progress','Completed','On Hold'];
 const activeJobs=()=>bcCoreJobs.filter(j=>['Ready for Production','In Production','Completed','Closed'].includes(j.status));
-const e=s=>esc(s);
 function summary(){
  const jobs=activeJobs();
  return '<div class="bc-prod-cards">'+[
@@ -1786,7 +1797,7 @@ function productionPage(){
  const completed=names.filter((_,i)=>rec[i]?.status==='Completed').length;
  const percent=names.length?Math.round(completed/names.length*100):0;
  return '<div class="bc-prod-head"><div><h2>Production Management</h2><p class="muted">Track production work for the selected organization.</p></div><div><button class="btn secondary" onclick="bcProdRefresh()">Refresh Jobs</button> <button class="btn secondary" onclick="bcProdSettings()">Workflow Settings</button></div></div>'+
- '<div class="bc-prod-note"><b>Preview mode:</b> Jobs and their overall statuses are loaded from Blueprint Collective. Production-stage edits and organization workflow settings are saved in this browser only until the production backend is connected. They do not change job statuses or Monday.com.</div>'+
+ '<div class="bc-prod-note"><b>Connected to Supabase:</b> Production stages, assignments, dates, and notes are saved to the Blueprint Collective database. Overall job status and approvals remain managed through Jobs & Projects.</div>'+ (bcProdError?'<div class="bc-prod-note" style="color:#b42318">'+e(bcProdError)+'</div>':'')+
  summary()+
  '<div class="bc-prod-grid"><section class="bc-prod-panel"><h3>Production Queue</h3><p class="muted">'+jobs.length+' eligible job(s)</p><div class="bc-prod-list">'+
  (jobs.map(j=>'<button class="bc-prod-item '+(String(j.id)===selectedJob?'selected':'')+'" onclick="bcProdSelect(\''+e(j.id)+'\')"><b>'+e(j.job_number||'Job')+'</b> · '+e(j.title||'Untitled')+'<div class="muted">'+e(j.client_name||'')+' · '+e(j.status)+'</div></button>').join('')||'<p class="muted">No jobs are ready for production yet.</p>')+
@@ -1804,20 +1815,42 @@ function productionPage(){
 function settingsPage(){
  const names=stages();
  return '<div class="bc-prod-head"><div><h2>Production Workflow Settings</h2><p class="muted">Configure the default stages for this organization.</p></div><button class="btn secondary" onclick="bcProdBack()">Back to Production</button></div>'+
- '<section class="bc-prod-panel"><h3>Organization Production Stages</h3><div class="bc-prod-note">Preview settings are saved separately per organization in this browser. Renaming or reordering stages in this preview may reset stage-position tracking; the permanent backend will use stable stage IDs.</div>'+
+ '<section class="bc-prod-panel"><h3>Organization Production Stages</h3><div class="bc-prod-note">Stages are stored in Supabase for this organization. Stages with existing production history cannot be deleted.</div>'+
  '<div class="bc-prod-settings">'+names.map((name,i)=>'<div class="bc-prod-setting"><span style="min-width:24px">'+(i+1)+'.</span><input aria-label="Stage name" value="'+e(name)+'" onchange="bcProdRename('+i+',this.value)"><button class="btn secondary" onclick="bcProdMove('+i+',-1)" '+(i===0?'disabled':'')+' title="Move up">↑</button><button class="btn secondary" onclick="bcProdMove('+i+',1)" '+(i===names.length-1?'disabled':'')+' title="Move down">↓</button><button class="btn secondary" onclick="bcProdRemove('+i+')" title="Remove stage">×</button></div>').join('')+'</div>'+
- '<div style="margin-top:18px"><button class="btn" onclick="bcProdAdd()">+ Add Stage</button> <button class="btn secondary" onclick="bcProdReset()">Restore Defaults</button></div></section>';
+ '<div style="margin-top:18px"><button class="btn" onclick="bcProdAdd()">+ Add Stage</button></div></section>';
 }
 window.bcProdSelect=id=>{selectedJob=String(id);render()};
-window.bcProdField=(index,field,value)=>{if(!selectedJob)return;const all=progress();const r=all[selectedJob]||{};r[index]={...(r[index]||{}),[field]:value};all[selectedJob]=r;write('progress',all);render()};
-window.bcProdRefresh=async()=>{await bcCoreLoadJobs();render()};
+window.bcProdField=async(index,field,value)=>{
+ if(!selectedJob||!bcProdStages[index])return;
+ const r=(progress()[selectedJob]||{})[index]||{};
+ const next={...r,[field]:value};
+ try{await bcJobsRequest({action:'productionSaveEntry',id:selectedJob,stageId:bcProdStages[index].id,status:next.status||'Not Started',assignedTo:next.assignee||'',targetDate:next.target||null,completedDate:next.completed||null,notes:next.notes||''});await bcProdLoad();}
+ catch(err){alert('Unable to save production stage: '+String(err.message||err));}
+};
+window.bcProdRefresh=async()=>{await bcCoreLoadJobs();await bcProdLoad()};
 window.bcProdSettings=()=>{page='production-settings';render()};
 window.bcProdBack=()=>{page='production';render()};
-window.bcProdRename=(i,name)=>{if(!name.trim())return alert('Stage name cannot be blank');const a=stages();a[i]=name.trim();write('stages',a);render()};
-window.bcProdMove=(i,step)=>{const a=stages(),j=i+step;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];write('stages',a);render()};
-window.bcProdRemove=i=>{if(!confirm('Remove this stage from the preview workflow?'))return;const a=stages();a.splice(i,1);write('stages',a);render()};
-window.bcProdAdd=()=>{const a=stages();a.push('New Production Stage');write('stages',a);render()};
-window.bcProdReset=()=>{if(confirm('Restore the default production stages for this organization?')){write('stages',defaults);render()}};
+window.bcProdRename=async(i,name)=>{
+ if(!name.trim())return alert('Stage name cannot be blank');
+ try{await bcJobsRequest({action:'productionSaveStage',stageId:bcProdStages[i].id,name:name.trim(),sortOrder:i});await bcProdLoad()}
+ catch(err){alert(String(err.message||err))}
+};
+window.bcProdMove=async(i,step)=>{
+ const j=i+step;if(j<0||j>=bcProdStages.length)return;
+ const a=bcProdStages[i],b=bcProdStages[j];
+ try{await bcJobsRequest({action:'productionSaveStage',stageId:a.id,name:a.name,sortOrder:j});await bcJobsRequest({action:'productionSaveStage',stageId:b.id,name:b.name,sortOrder:i});await bcProdLoad()}
+ catch(err){alert(String(err.message||err))}
+};
+window.bcProdRemove=async i=>{
+ if(!confirm('Remove this production stage? Stages with history cannot be removed.'))return;
+ try{await bcJobsRequest({action:'productionRemoveStage',stageId:bcProdStages[i].id});await bcProdLoad()}
+ catch(err){alert(String(err.message||err))}
+};
+window.bcProdAdd=async()=>{
+ try{await bcJobsRequest({action:'productionSaveStage',name:'New Production Stage',sortOrder:bcProdStages.length});await bcProdLoad()}
+ catch(err){alert(String(err.message||err))}
+};
+window.bcProdReset=async()=>{alert('To preserve existing production history, reset is disabled. You can rename, reorder, and add stages individually.')};
 const originalRender=render;
 render=function(){
  const productionView=page==='production'||page==='production-settings';
@@ -1849,7 +1882,7 @@ render=function(){
  }
 };
 const oldNavigate=navigate;
-navigate=function(p){if(p==='production'||p==='production-settings'){page=p;search='';render();if(!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs().then(()=>{if(page==='production')render()});return}oldNavigate(p)};
+navigate=function(p){if(p==='production'||p==='production-settings'){page=p;search='';render();if(!bcJobsLoaded&&!bcJobsBusy&&bcSession)bcCoreLoadJobs().then(()=>{if(page==='production')render()});bcProdLoad();return}oldNavigate(p)};
 })();
 </script>
 </body></html>
