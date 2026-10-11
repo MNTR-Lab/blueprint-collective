@@ -1335,11 +1335,13 @@ bcJobsPage=function(){
  const actions=pending?'<button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Approved\')">Approve</button> <button class="btn secondary" onclick="bcJobReview(\''+a.id+'\',\'Changes Requested\')">Request Changes</button>':'';
  return '<div class="bc-workflow-record"><div><strong>'+h(fileName(a.document_id))+'</strong><div class="muted">'+status+' · '+new Date(a.requested_at).toLocaleString()+'</div>'+(a.review_note?'<p>'+h(a.review_note)+'</p>':'')+'</div><div>'+actions+'</div></div>';
  }).join('');
+ const revisionRequests=approvals.filter(a=>a.status==='Changes Requested'&&a.revision_status==='Needs Revision');
+ const revisionHtml=revisionRequests.length?'<div class="bc-revisions"><h4>Revisions Required ('+revisionRequests.length+')</h4><p class="muted">Upload the corrected document above, then resubmit it for approval.</p>'+revisionRequests.map(a=>'<div class="bc-revision-task"><div><strong>'+h(fileName(a.document_id))+'</strong><p><strong>Changes requested:</strong> '+h(a.review_note||'See approval notes')+'</p><span class="bc-revision-status">Needs Revision</span></div><form data-approval-id="'+h(a.id)+'" onsubmit="bcJobSubmitRevision(event,this.dataset.approvalId)"><label>Updated document<select name="documentId" required><option value="">Select newly uploaded file</option>'+docs.filter(d=>d.id!==a.document_id).map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+'</option>').join('')+'</select></label><label>Revision notes<input name="note" placeholder="What was updated?"></label><button class="btn" type="submit">Resubmit for Approval</button></form></div>').join('')+'</div>':'';
  const approvalHistory=events.length?'<details><summary>Approval history ('+events.length+')</summary>'+events.map(e=>'<div class="bc-workflow-event"><strong>'+h(e.event_type)+'</strong> · '+h(new Date(e.created_at).toLocaleString())+(e.note?' — '+h(e.note):'')+'</div>').join('')+'</details>':'';
  const docOptions=docs.map(d=>'<option value="'+h(d.id)+'">'+h(d.filename)+' ('+h(d.category)+')</option>').join('');
  const approvalHtml='<section class="bc-workflow-box"><div class="bc-workflow-title"><h3>Document Approvals</h3><span class="bc-workflow-pill">Internal review</span></div><p class="muted">Submit an uploaded document for an internal approval decision. Every decision is recorded.</p>'+
  (docs.length?'<form onsubmit="bcJobRequestApproval(event)" class="bc-workflow-form"><label>Document to review<select name="documentId" required>'+docOptions+'</select></label><button class="btn" type="submit">Request Approval</button></form>':'<p>Upload a document above to request approval.</p>')+
- (approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
+ revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
  let emailsHtml='';
  if(bcJobEmailBusy)emailsHtml='<p>Loading correspondence…</p>';
  else if(!bcJobEmailData)emailsHtml='<button class="btn secondary" onclick="bcJobLoadEmails()">Load Emails</button>';
@@ -1362,6 +1364,14 @@ const bcDetailOpenBeforeWorkflow=bcDetailOpen;
 bcDetailOpen=async function(id){bcJobEmailData=null;bcJobEmailBusy=false;await bcDetailOpenBeforeWorkflow(id)};
 const bcDetailCloseBeforeWorkflow=bcDetailClose;
 bcDetailClose=function(){bcJobEmailData=null;bcDetailCloseBeforeWorkflow()};
+async function bcJobSubmitRevision(event,approvalId){
+ event.preventDefault();
+ const f=event.currentTarget,b=f.querySelector('button'),documentId=f.elements.documentId.value;
+ if(!documentId){alert('Upload the corrected document above, then select it here.');return}
+ b.disabled=true;
+ try{await bcJobsRequest({action:'submitRevision',id:bcDetailJobId,approvalId,documentId,note:f.elements.note.value});await bcDetailReload()}
+ catch(err){alert('Unable to resubmit: '+err.message);b.disabled=false}
+}
 async function bcJobRequestApproval(event){
  event.preventDefault();
  const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;
@@ -1409,4 +1419,11 @@ async function bcJobEmailLink(emailId,direction,attach){
 .bc-workflow-box details{margin-top:14px}
 @media(max-width:540px){.bc-workflow-form button{width:100%}}
 </style>
-</body></html>
+<style>
+.bc-revisions{padding:16px;border:1px solid #f1c79b;border-radius:12px;background:#fffaf3;margin:14px 0}
+.bc-revisions h4{margin:0 0 8px}.bc-revision-task{padding:14px 0;border-top:1px solid #efdcc8;display:grid;grid-template-columns:1fr 1.2fr;gap:20px}
+.bc-revision-task p{white-space:pre-wrap}.bc-revision-status{font-size:12px;font-weight:700;color:#8a4b12}
+.bc-revision-task form{display:flex;flex-direction:column;gap:10px}.bc-revision-task label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600}
+.bc-revision-task select,.bc-revision-task input{padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:white}
+@media(max-width:650px){.bc-revision-task{grid-template-columns:1fr}}
+</style></body></html>
