@@ -2187,9 +2187,10 @@ bcInboxLayout=function(){
  if(bcMailTab==='sent')return top+'<section class="panel">'+tabs+notice+bcOutgoingSentLayout()+'</section>';
  if(bcMailTab==='compose')return top+'<section class="panel">'+tabs+notice+bcOutgoingComposeLayout()+'</section>';
  const messages=bcInboxVisibleMessages().filter(m=>[m.sender,m.subject,bcEmailClientMatch(m)?.name].some(x=>String(x||'').toLowerCase().includes(bcMailSearch.toLowerCase())));
- const rows=messages.map(m=>'<button class="bc-mail-item '+(bcInboxSelected===m.id?'selected':'')+'" onclick="bcOpenInboxMessage(\''+bcInboxEscape(m.id)+'\')"><strong>'+bcInboxEscape(m.subject||'(No subject)')+'</strong><small>'+bcInboxEscape(m.sender)+'</small><small>'+bcInboxEscape(bcEmailClientMatch(m)?.name||'Unmatched client')+' · '+bcInboxEscape(new Date(m.received_at).toLocaleString())+'</small></button>').join('');
+ const threads=bcMailBuildThreads(messages);
+ const rows=threads.map(t=>'<button class="bc-mail-item '+(t.items.some(m=>m.id===bcInboxSelected)?'selected':'')+'" onclick="bcOpenInboxMessage(\\''+bcInboxEscape(t.latest.id)+'\\')"><strong>'+bcInboxEscape(t.latest.subject||'(No subject)')+(t.items.length>1?' <span style="font-size:12px;opacity:.7">('+t.items.length+')</span>':'')+'</strong><small>'+bcInboxEscape(t.latest.sender)+'</small><small>'+bcInboxEscape(bcEmailClientMatch(t.latest)?.name||'Unmatched client')+' · '+bcInboxEscape(new Date(t.latest.received_at).toLocaleString())+'</small></button>').join('');
  const selected=bcInboxMessages.find(m=>m.id===bcInboxSelected);
- return top+'<section class="panel">'+tabs+notice+bcInboxFilterNotice()+'<div class="bc-mail-bar"><input id="bcMailSearch" placeholder="Search sender, subject, client…" value="'+bcInboxEscape(bcMailSearch)+'" oninput="bcMailFilter(this.value)"><span class="muted">'+messages.length+' messages</span></div>'+(bcInboxBusy?'<p>Loading messages…</p>':'')+'<div class="bc-mail-layout"><div class="bc-mail-list">'+(rows||'<p style="padding:16px">No matching messages.</p>')+'</div><div class="bc-mail-reader">'+(selected?bcInboxDetail(selected):'<p class="muted">Select a message to read or reply.</p>')+'</div></div></section>';
+ return top+'<section class="panel">'+tabs+notice+bcInboxFilterNotice()+'<div class="bc-mail-bar"><input id="bcMailSearch" placeholder="Search sender, subject, client…" value="'+bcInboxEscape(bcMailSearch)+'" oninput="bcMailFilter(this.value)"><span class="muted">'+threads.length+' conversations · '+messages.length+' messages</span></div>'+(bcInboxBusy?'<p>Loading messages…</p>':'')+'<div class="bc-mail-layout"><div class="bc-mail-list">'+(rows||'<p style="padding:16px">No matching messages.</p>')+'</div><div class="bc-mail-reader">'+(selected?bcInboxDetail(selected):'<p class="muted">Select a conversation to read or reply.</p>')+'</div></div></section>';
 };
 </script>
 
@@ -2247,4 +2248,37 @@ bcInboxDetail=function(m){
 </script>
 
 
+
+<script>
+/* Group incoming replies in the existing Email Center; no extra page or panel. */
+function bcMailThreadSubject(subject){
+ return String(subject||'(No subject)').replace(/^\s*((re|fw|fwd)\s*:\s*)+/ig,'').trim().toLowerCase();
+}
+function bcMailThreadKey(m){
+ const sender=bcClientEmailAddress(m.sender||'').toLowerCase();
+ return bcMailThreadSubject(m.subject)+'|'+sender;
+}
+function bcMailBuildThreads(messages){
+ const groups=new Map();
+ for(const m of messages){
+  const key=bcMailThreadKey(m);
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(m);
+ }
+ return [...groups.values()].map(items=>{
+  items.sort((a,b)=>new Date(a.received_at)-new Date(b.received_at));
+  return {items,latest:items[items.length-1]};
+ }).sort((a,b)=>new Date(b.latest.received_at)-new Date(a.latest.received_at));
+}
+const bcMailPreviousDetail=bcInboxDetail;
+bcInboxDetail=function(m){
+ if(!m)return bcMailPreviousDetail(m);
+ const key=bcMailThreadKey(m);
+ const items=bcInboxMessages.filter(x=>bcMailThreadKey(x)===key)
+  .sort((a,b)=>new Date(a.received_at)-new Date(b.received_at));
+ if(items.length<2)return bcMailPreviousDetail(m);
+ const history=items.map((x,i)=>'<details '+(x.id===m.id?'open':'')+' style="border-bottom:1px solid #e3e9f0;padding:10px 0"><summary style="cursor:pointer"><strong>'+bcInboxEscape(x.sender)+'</strong> <span class="muted">'+bcInboxEscape(new Date(x.received_at).toLocaleString())+'</span></summary><p style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto">'+bcInboxEscape(bcEmailBody(x))+'</p></details>').join('');
+ return '<div style="margin-bottom:12px"><strong>'+items.length+' messages in this conversation</strong><p class="muted">Incoming messages grouped by sender and subject.</p>'+history+'</div>'+bcMailPreviousDetail(m);
+};
+</script>
 </body></html>
