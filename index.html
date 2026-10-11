@@ -1843,25 +1843,44 @@ function workloadPage(){
  (filtered.sort((a,b)=>(a.status==='Completed')-(b.status==='Completed')||(a.target||'9999').localeCompare(b.target||'9999')).map(r=>'<tr style="border-top:1px solid #e5e7eb"><td style="padding:10px">'+e(r.name)+'</td><td style="padding:10px">'+e(r.job.job_number||'Job')+' · '+e(r.job.title||'')+'</td><td style="padding:10px">'+e(r.stage.name)+'</td><td style="padding:10px">'+e(r.status)+'</td><td style="padding:10px">'+(r.target?e(r.target)+(r.target<today&&r.status!=='Completed'?' <b style="color:#b42318">Overdue</b>':''):'—')+'</td><td style="padding:10px"><button class="btn secondary" onclick="bcProdSelect(\''+e(r.job.id)+'\')">Open Job</button></td></tr>').join('')||'<tr><td colspan="6" style="padding:16px" class="muted">No production assignments for this selection.</td></tr>')+'</tbody></table></div></section>';
 }
 window.bcProdWorkloadFilter=value=>{bcProdWorkloadEmployee=value;render()};
+function bcGuessCarrier(raw){
+ const n=String(raw||'').trim().replace(/[\s-]/g,'').toUpperCase();
+ if(!n)return {name:'Enter a tracking number',url:''};
+ if(/^1Z[A-Z0-9]{16}$/.test(n))return {name:'UPS',url:'https://www.ups.com/track?tracknum='+encodeURIComponent(n)};
+ if(/^(94|93|92|95|96)\d{18,20}$/.test(n)||/^(70|71|72|73|74|75|76|77|78|79)\d{18,20}$/.test(n))return {name:'USPS (likely)',url:'https://tools.usps.com/go/TrackConfirmAction?tLabels='+encodeURIComponent(n)};
+ if(/^\d{12}$/.test(n)||/^\d{15}$/.test(n)||/^\d{20}$/.test(n))return {name:'Carrier uncertain',url:''};
+ return {name:'Carrier unknown — verify tracking number',url:''};
+}
+window.bcFulfillmentTrackingChanged=()=>{
+ const t=document.getElementById('bcFulfillTracking'),label=document.getElementById('bcFulfillDetected'),link=document.getElementById('bcFulfillTrackLink');
+ if(!t||!label||!link)return;
+ const info=bcGuessCarrier(t.value);
+ label.textContent=info.name;
+ link.textContent=info.url?'Open carrier tracking page':'';
+ link.href=info.url||'#';
+ link.style.display=info.url?'inline':'none';
+};
 function bcFulfillmentPanel(job){
  const f=bcProdFulfillments.find(x=>x.job_id===job.id)||{};
  const option=(arr,v)=>arr.map(x=>'<option '+(x===v?'selected':'')+'>'+e(x)+'</option>').join('');
- return '<section class="bc-prod-panel" style="margin-top:18px"><h3>Delivery &amp; Fulfillment</h3>'+
- '<p class="muted">Save shipment or pickup information. Automated customer emails will activate after an outbound email service is connected; saving a tracking number does not send an email yet.</p>'+
- '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
- '<div><label>Fulfillment method</label><select id="bcFulfillMethod">'+option(['Shipping','Pickup','Local Delivery'],f.method||'Shipping')+'</select></div>'+
- '<div><label>Fulfillment status</label><select id="bcFulfillStatus">'+option(['Pending','Ready for Pickup','Shipped','Delivered','Picked Up'],f.status||'Pending')+'</select></div>'+
- '<div><label>Shipping carrier</label><input id="bcFulfillCarrier" placeholder="UPS, FedEx, USPS…" value="'+e(f.carrier||'')+'"></div>'+
- '<div><label>Tracking number</label><input id="bcFulfillTracking" placeholder="Enter tracking number" value="'+e(f.tracking_number||'')+'"></div>'+
- '<div><label>Tracking URL (optional)</label><input id="bcFulfillUrl" type="url" placeholder="https://…" value="'+e(f.tracking_url||'')+'"></div>'+
- '<div><label>Customer email</label><input id="bcFulfillEmail" type="email" placeholder="client@example.com" value="'+e(f.recipient_email||'')+'"></div></div>'+
- '<p class="muted" style="margin-top:12px">Client notification: <b>'+e(f.notification_status||'Not Sent')+'</b></p>'+
- '<button class="btn" onclick="bcFulfillmentSave(&quot;'+e(job.id)+'&quot;)">Save Fulfillment</button></section>';
+ const carrier=bcGuessCarrier(f.tracking_number||'');
+ return '<section class="bc-prod-panel" style="margin-top:18px">'+
+ '<div class="bc-prod-head"><div><h3>Delivery &amp; Fulfillment</h3><p class="muted">Manage shipment, pickup, and customer delivery details for this job.</p></div><span class="status green">'+e(f.status||'Pending')+'</span></div>'+
+ '<div class="bc-prod-note"><b>Client notification:</b> '+e(f.notification_status||'Not Sent')+' · Automatic emails will be enabled after an email service is connected.</div>'+
+ '<div class="bc-prod-stages">'+
+ '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>1. Fulfillment details</b><span class="muted">Order delivery</span></div>'+
+ '<label>Delivery method</label><select id="bcFulfillMethod">'+option(['Shipping','Pickup','Local Delivery'],f.method||'Shipping')+'</select>'+
+ '<label>Delivery status</label><select id="bcFulfillStatus">'+option(['Pending','Ready for Pickup','Shipped','Delivered','Picked Up'],f.status||'Pending')+'</select></div>'+
+ '<div class="bc-prod-stage"><div class="bc-prod-stage-head"><b>2. Tracking information</b><span class="muted">No carrier selection required</span></div>'+
+ '<label>Tracking number</label><input id="bcFulfillTracking" placeholder="Enter tracking number" value="'+e(f.tracking_number||'')+'" oninput="bcFulfillmentTrackingChanged()">'+
+ '<p class="muted">Detected carrier: <b id="bcFulfillDetected">'+e(carrier.name)+'</b> <a id="bcFulfillTrackLink" href="'+e(carrier.url||'#')+'" target="_blank" rel="noopener noreferrer" style="'+(carrier.url?'':'display:none')+'">Open carrier tracking page</a></p>'+
+ '<label>Customer email</label><input id="bcFulfillEmail" type="email" placeholder="client@example.com" value="'+e(f.recipient_email||'')+'"></div></div>'+
+ '<div style="margin-top:16px"><button class="btn" onclick="bcFulfillmentSave(&quot;'+e(job.id)+'&quot;)">Save Fulfillment</button></div></section>';
 }
 window.bcFulfillmentSave=async jobId=>{
  const v=id=>document.getElementById(id)?.value||'';
  try{
-  const r=await bcJobsRequest({action:'fulfillmentSave',jobId,method:v('bcFulfillMethod'),status:v('bcFulfillStatus'),carrier:v('bcFulfillCarrier'),trackingNumber:v('bcFulfillTracking'),trackingUrl:v('bcFulfillUrl'),recipientEmail:v('bcFulfillEmail')});
+  const r=await bcJobsRequest({action:'fulfillmentSave',jobId,method:v('bcFulfillMethod'),status:v('bcFulfillStatus'),carrier:bcGuessCarrier(v('bcFulfillTracking')).name==='UPS'?'UPS':bcGuessCarrier(v('bcFulfillTracking')).name==='USPS (likely)'?'USPS':'',trackingNumber:v('bcFulfillTracking'),trackingUrl:bcGuessCarrier(v('bcFulfillTracking')).url,recipientEmail:v('bcFulfillEmail')});
   await bcProdLoad();
   alert('Fulfillment saved. Customer email has not been sent; email integration is the next step.');
  }catch(err){alert('Unable to save fulfillment: '+String(err.message||err))}
