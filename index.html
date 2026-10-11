@@ -1345,7 +1345,11 @@ bcJobsPage=function(){
  revisionHtml+(approvalRows||'<p class="muted">No approval requests yet.</p>')+approvalHistory+'</section>';
  let emailsHtml='';
  if(bcJobEmailBusy)emailsHtml='<p>Loading correspondence…</p>';
- else if(!bcJobEmailData)emailsHtml='<button class="btn secondary" onclick="bcJobLoadEmails()">Load Emails</button>';
+ else if(!bcJobEmailData){
+  const saved=bcDetailData.linkedEmails||[];
+  const rows=saved.map(e=>'<div class="bc-workflow-record"><div><strong>'+h(e.subject||'(No subject)')+'</strong><div class="muted">'+h(e.direction==='incoming'?'Received':'Sent')+' · '+h(e.sender||'')+' → '+h(e.recipient||'')+' · '+h(e.when?new Date(e.when).toLocaleString():'')+'</div></div><div class="bc-mail-buttons"><button class="btn secondary" onclick="bcJobViewEmail(\''+e.id+'\',\''+e.direction+'\')">Read Email</button><button class="btn secondary" onclick="bcJobEmailLink(\''+e.id+'\',\''+e.direction+'\',false)">Unlink</button></div></div>').join('');
+  emailsHtml=(rows||'<p class="muted">No emails linked to this job yet.</p>')+'<button class="btn secondary" onclick="bcJobLoadEmails()">Browse & Link More Emails</button>';
+ }
  else{
   const links=bcDetailData.emailLinks||[];
   const combined=[...(bcJobEmailData.incoming||[]).map(e=>({...e,direction:'incoming',when:e.received_at})),...(bcJobEmailData.outgoing||[]).map(e=>({...e,direction:'outgoing',when:e.sent_at||e.created_at}))].sort((a,b)=>new Date(b.when)-new Date(a.when));
