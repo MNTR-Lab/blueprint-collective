@@ -3109,4 +3109,63 @@ function bcCoreJobInlineTasks(id){
 .bc-job-inline-tasks[open] .bc-job-inline-chevron{transform:rotate(180deg)}
 .bc-job-inline-tasks .bc-task-expand-list{padding:0 12px 12px}
 </style>
+
+<script>
+/* Keep Job Tasks inside the full Job Details panel, with the other collapsible sections. */
+function bcPlaceJobTasksInDetails(){
+ if(page!=='jobs'||!bcDetailJobId)return;
+ const heading=[...document.querySelectorAll('#view h2')].find(el=>el.textContent.trim()==='Job Details');
+ const panel=heading?.closest('section.panel');
+ if(!panel)return;
+ const documents=[...panel.querySelectorAll('details.bc-collapse-section')].find(el=>el.querySelector('summary')?.textContent.includes('Job Documents'));
+ const existing=document.querySelector('#view .bc-core-job-tasks');
+ if(!documents)return;
+ const tasks=bcCoreJobTasks.filter(t=>String(t.job_id)===String(bcDetailJobId));
+ const outstanding=tasks.filter(t=>t.status!=='Completed').length;
+ let block=existing;
+ if(!block){
+  block=document.createElement('details');
+  block.className='bc-core-job-tasks bc-collapse-section';
+ }
+ block.classList.add('bc-collapse-section');
+ block.classList.remove('panel');
+ block.innerHTML='<summary><span>Job Tasks</span><span class="bc-collapse-meta">'+outstanding+' outstanding · '+tasks.length+' total</span></summary>'+
+ '<div class="bc-collapse-content"><div class="bc-task-expand-list">'+
+ (tasks.map(bcCoreTaskRow).join('')||'<p class="muted">No tasks added to this job yet.</p>')+
+ '</div></div>';
+ // Reuse the same panel and spacing as Job Documents, Approvals, and Correspondence.
+ documents.before(block);
+}
+const bcJobTasksLayoutPreviousRender=render;
+render=function(){
+ bcJobTasksLayoutPreviousRender();
+ bcPlaceJobTasksInDetails();
+};
+</script>
+<style>
+/* Override the earlier standalone task-panel styling in the detailed job view. */
+#view section.panel > details.bc-core-job-tasks.bc-collapse-section{
+ margin:0;
+ border:1px solid #d9e3ee;
+ border-radius:10px;
+ background:#fff;
+ overflow:hidden;
+}
+#view section.panel > details.bc-core-job-tasks.bc-collapse-section > summary{
+ padding:15px 18px;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ gap:12px;
+ font-weight:700;
+}
+#view section.panel > details.bc-core-job-tasks.bc-collapse-section > summary span:last-child{
+ color:#64748b;
+ font-size:12px;
+ font-weight:400;
+}
+#view section.panel > details.bc-core-job-tasks.bc-collapse-section > .bc-collapse-content{
+ padding:14px;
+}
+</style>
 </body></html>
