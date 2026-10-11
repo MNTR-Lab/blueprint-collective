@@ -531,13 +531,7 @@ body[class*="bc-view-"] #workspace>div:first-of-type{margin-bottom:15px}
  if(!workspace)return;
  const home=document.createElement('section');
  home.id='bcDashboardHome';
- home.innerHTML=`<div class="bc-dashboard-cards">
- <button type="button" class="bc-dashboard-card" data-go="employee-jobs"><span class="bc-card-icon">▣</span><b>My Jobs</b><small>View your assigned projects and production work</small></button>
- <button type="button" class="bc-dashboard-card" data-go="employee-tasks"><span class="bc-card-icon">☑</span><b>My Tasks</b><small>Manage due dates, progress, and archived tasks</small></button>
- <button type="button" class="bc-dashboard-card" data-go="employee-notifications"><span class="bc-card-icon">♧</span><b>Notifications</b><small id="bcDashAlerts">Review new assignments and updates</small></button>
- <button type="button" class="bc-dashboard-card" data-go="employee-email"><span class="bc-card-icon">✉</span><b>My Email</b><small>Read conversations assigned to you</small></button>
- <button type="button" class="bc-dashboard-card" data-go="employee-messages"><span class="bc-card-icon">◉</span><b>Team Messages</b><small>Collaborate with your coworkers</small></button>
- </div><div class="bc-dashboard-panel"><h2>Recent Notifications</h2><div id="bcDashActivity">Loading updates…</div><button type="button" class="secondary" data-go="employee-notifications">See All Notifications</button></div>`;
+ home.innerHTML=`<div class="bc-dashboard-panel"><h2>Recent Notifications</h2><div id="bcDashActivity">Loading updates…</div><button type="button" class="secondary" data-go="employee-notifications">See All Notifications</button></div>`;
  const anchor=document.getElementById('employee-dashboard');
  anchor?.insertAdjacentElement('afterend',home);
  function openFold(id){
