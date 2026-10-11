@@ -336,52 +336,54 @@ document.getElementById('employeeEmailRefresh').onclick=loadEmail;
 </style>
 <script id="employee-job-task-notification-dots">
 (function(){
- let notificationTasks=new Set(),noteTasks=new Set(),jobIds=new Set(),busy=false;
- const dot=(label)=>'<span class="employee-unread-dot" title="'+label+'" aria-label="'+label+'"></span>';
+ const state={tasks:new Set(),jobs:new Set(),busy:false};
+ const marker='<span class="employee-unread-dot" title="Unread assigned task update" aria-label="Unread assigned task update"></span>';
  function paint(){
-  const all=new Set([...notificationTasks,...noteTasks]);
-  document.querySelectorAll('#rows tr').forEach(tr=>{
-   const select=tr.querySelector('select[data-task]');if(!select)return;
-   const cell=tr.cells[0];if(!cell)return;
-   cell.querySelectorAll('.employee-unread-dot').forEach(x=>x.remove());
-   if(all.has(String(select.dataset.task)))cell.insertAdjacentHTML('beforeend',dot('Unread task update or note'));
-  });
-  document.querySelectorAll('#jobcards [data-job]').forEach(button=>{
-   const card=button.parentElement;if(!card)return;
-   card.querySelectorAll('.employee-unread-dot').forEach(x=>x.remove());
-   if(jobIds.has(String(button.dataset.job))){
-    const heading=card.querySelector('strong');if(heading)heading.insertAdjacentHTML('beforeend',dot('Job has an unread task update'));
-   }
-  });
+   document.querySelectorAll('#rows select[data-task]').forEach(select=>{
+     const cell=select.closest('tr')?.cells?.[0];if(!cell)return;
+     const shouldShow=state.tasks.has(String(select.dataset.task));
+     const existing=cell.querySelector('.employee-unread-dot');
+     if(shouldShow&&!existing)cell.insertAdjacentHTML('beforeend',marker);
+     if(!shouldShow&&existing)existing.remove();
+   });
+   document.querySelectorAll('#jobcards button[data-job]').forEach(button=>{
+     const heading=button.parentElement?.querySelector('strong');if(!heading)return;
+     const shouldShow=state.jobs.has(String(button.dataset.job));
+     const existing=heading.querySelector('.employee-unread-dot');
+     if(shouldShow&&!existing)heading.insertAdjacentHTML('beforeend',marker);
+     if(!shouldShow&&existing)existing.remove();
+   });
  }
  async function update(){
-  if(busy)return;busy=true;
-  try{
-   const [notifications,tasks,notes]=await Promise.all([
-    call('notifications_list'),call('my_tasks'),call('task_notes_unread')
-   ]);
-   notificationTasks=new Set((notifications.items||[]).filter(n=>!n.read_at&&n.task_id).map(n=>String(n.task_id)));
-   noteTasks=new Set((notes.taskIds||[]).map(String));
-   const all=new Set([...notificationTasks,...noteTasks]);
-   jobIds=new Set((tasks.tasks||[]).filter(t=>all.has(String(t.id))).map(t=>String(t.job_id)));
-   paint();
-  }catch(e){console.warn('Unable to refresh job/task indicators',e)}
-  finally{busy=false}
+   if(state.busy||document.getElementById('workspace')?.classList.contains('hide'))return;
+   state.busy=true;
+   try{
+     const [notifications,notes,assigned]=await Promise.all([
+       call('notifications_list'),call('task_notes_unread'),call('my_tasks')
+     ]);
+     const assignedTasks=assigned.tasks||[];
+     const assignedIds=new Set(assignedTasks.map(t=>String(t.id)));
+     const unreadNotificationIds=(notifications.items||[])
+       .filter(n=>!n.read_at&&n.task_id&&assignedIds.has(String(n.task_id)))
+       .map(n=>String(n.task_id));
+     const unreadNoteIds=(notes.taskIds||[]).map(String).filter(id=>assignedIds.has(id));
+     state.tasks=new Set([...unreadNotificationIds,...unreadNoteIds]);
+     state.jobs=new Set(assignedTasks.filter(t=>state.tasks.has(String(t.id))).map(t=>String(t.job_id)));
+     paint();
+   }catch(error){console.warn('Employee task notification indicators could not refresh:',error)}
+   finally{state.busy=false}
  }
  window.bcRefreshJobTaskNotificationDots=update;
+ // Refresh after marking a notification read; preserve existing notification rendering.
  const previousRefresh=refreshEmployeeNotifications;
- refreshEmployeeNotifications=async function(){const result=await previousRefresh();await update();return result};
- const originalNotes=employeeTaskNotes;
- employeeTaskNotes=async function(taskId,title){
-  const result=await originalNotes(taskId,title);
-  await update();
-  return result;
- };
- const originalLoad=load;
- load=async function(){await originalLoad();await update()};
+ refreshEmployeeNotifications=async function(){const value=await previousRefresh();await update();return value};
+ // Refresh after reading task notes; do not clear alerts on merely opening a job.
+ const previousNotes=employeeTaskNotes;
+ employeeTaskNotes=async function(taskId,title){const value=await previousNotes(taskId,title);await update();return value};
+ const previousLoad=load;
+ load=async function(){await previousLoad();await update()};
  const jobs=document.getElementById('jobcards'),rows=document.getElementById('rows');
- for(const root of [jobs,rows])if(root)new MutationObserver(()=>paint()).observe(root,{childList:true,subtree:false});
- setTimeout(update,1200);
+ for(const root of [jobs,rows])if(root)new MutationObserver(paint).observe(root,{childList:true});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});
  setInterval(()=>{if(!document.hidden)update()},30000);
 })();
