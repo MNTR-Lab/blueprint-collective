@@ -1998,7 +1998,7 @@ function productionPage(){
  const earnedMilestones=completed*2+started;
  const totalMilestones=names.length*2;
  const shipped=job&&bcProdFulfillments.some(f=>f.job_id===job.id&&f.method==='Shipping'&&['Shipped','Delivered'].includes(f.status)&&f.tracking_number);
- const percent=shipped||['Completed','Closed'].includes(job?.status)?100:totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
+ const percent=totalMilestones?Math.round(earnedMilestones/totalMilestones*100):0;
  return '<div class="bc-prod-head"><div><h2>Production Management</h2><p class="muted">Track production work for the selected organization.</p></div><div><button class="btn secondary" onclick="bcProdRefresh()">Refresh Jobs</button> <button class="btn secondary" onclick="bcProdSettings()">Workflow Settings</button></div></div>'+
  '<div class="bc-prod-note"><b>Milestone progress:</b> Each stage earns one milestone when In Progress and another when Completed. Progress is recalculated from saved statuses, so changes are never double-counted. On Hold does not earn a milestone.</div>'+ (bcProdError?'<div class="bc-prod-note" style="color:#b42318">'+e(bcProdError)+'</div>':'')+
  summary()+workloadPage()+
