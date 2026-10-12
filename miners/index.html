@@ -160,7 +160,29 @@ async function loadMyDashboardTasks(){
  }catch(e){myDashboardTasksError=e.message}myDashboardTasksLoaded=true;
  if(authorized&&page==='dashboard')render();
 }
-function myDashboardPanel(){
+let myUpdates=[],myUpdatesLoaded=false,myUpdatesError='';
+async function loadMyUpdates(){
+ try{
+  const clientIds=[...new Set(myDashboardTasks.map(t=>t.client_id))].slice(0,30);
+  const results=await Promise.all(clientIds.map(id=>journalApi('list',id).then(d=>({id,data:d})).catch(()=>null)));
+  const email=(await db.auth.getUser()).data.user?.email?.toLowerCase()||'';
+  myUpdates=results.filter(Boolean).flatMap(({id,data})=>[
+    ...(data.notes||[]).filter(n=>String(n.author_email||'').toLowerCase()!==email).map(n=>({id:n.id,client_id:id,type:'note',title:'Client note',detail:n.body,author:n.author_email,created_at:n.created_at})),
+    ...(data.activity||[]).filter(a=>['task_created','task_updated','task_completed'].includes(a.event_type)&&String(a.actor_email||'').toLowerCase()!==email).map(a=>({id:a.id,client_id:id,type:'task',title:a.description,detail:'',author:a.actor_email,created_at:a.created_at}))
+  ]).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,40);
+  myUpdatesError='';
+ }catch(e){myUpdatesError=e.message}
+ myUpdatesLoaded=true;if(authorized&&page==='dashboard')render();
+}
+function myUpdatesPanel(){
+ const item=u=>{const c=rows.clients.find(x=>x.id===u.client_id);return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(u.title)+'</strong><div class="muted">'+esc(c?.name||'Client')+' · '+esc(u.author||'')+' · '+esc(new Date(u.created_at).toLocaleDateString())+'</div></div><span class="pill">'+(u.type==='note'?'Note':'Task update')+'</span></div>'+(u.detail?'<p class="journal-text">'+esc(u.detail)+'</p>':'')+'<button class="btn alt" data-myupdate="'+esc(u.client_id)+'" data-update-type="'+esc(u.type)+'">View '+(u.type==='note'?'Note':'Task')+' →</button></div>'};
+ return '<section class="rev-panel" style="margin-bottom:17px"><div class="rev-table-head"><div><h3>My Updates &amp; Notes</h3><p class="sub" style="margin:5px 0 0">Updates on clients with tasks assigned to you</p></div><button class="btn alt" id="refreshMyUpdates">Refresh Updates ↻</button></div>'+
+ (!myUpdatesLoaded?'<p class="muted">Loading updates…</p>':myUpdatesError?'<p class="muted">'+esc(myUpdatesError)+'</p>':myUpdates.length?myUpdates.map(item).join(''):'<p class="muted">No new notes or task changes found for your assigned clients.</p>')+'</section>';
+}
+async function openMyUpdate(id,type){
+ page='clients';expandedClient=null;render();await openClient(id);clientTab=type==='note'?'notes':'tasks';await (type==='note'?loadJournal(id):loadTasks(id));render();
+}
+\nfunction myDashboardPanel(){
  const pending=myDashboardTasks.filter(t=>t.status!=='completed');
  const completed=myDashboardTasks.filter(t=>t.status==='completed');
  const row=t=>{const c=rows.clients.find(x=>x.id===t.client_id);return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(t.title)+'</strong><div class="muted">'+esc(c?.name||'Client')+(t.due_date?' · Due '+esc(t.due_date):'')+' · '+esc(t.priority||'normal')+' priority</div></div><span class="pill">'+esc((t.status||'pending').replaceAll('_',' '))+'</span></div>'+(t.description?'<p class="journal-text">'+esc(t.description)+'</p>':'')+'<button class="btn alt" data-mytask="'+esc(t.client_id)+'">Open Task →</button></div>'};
@@ -180,7 +202,7 @@ const recent=[...rows.pipeline].sort((a,b)=>String(b.updated_at||b.created_at||'
 const moneyLabel=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(money);
 return '<section class="rev-hero"><div><h2>Wheeling Miners Overview</h2><p>Your workspace. Your performance. All in one place.</p></div><div class="rev-period">ORGANIZATIONAL CRM<br><span style="color:#fff;font-size:11px;font-weight:500;display:inline-block;margin-top:7px">LIVE WORKSPACE SUMMARY</span></div></section>'+
 ('<section class="rev-panel" style="margin-bottom:17px"><div class="rev-table-head"><div><h3>Sales Goals &amp; Revenue</h3><p class="sub" style="margin:5px 0 0">Goal tracking and verified revenue performance</p></div>'+(revenueAccess?'<button class="btn alt" data-go="revenue">Manage Revenue Goals →</button>':'')+'</div><div id="revenueGoalPanel"><p class="muted">Loading sales goal…</p></div></section>'+ (revenueAccess?revenueOverview():''))+
-myDashboardPanel()+
+myDashboardPanel()+myUpdatesPanel()+
 '<div class="rev-kpis">'+
 '<button class="rev-kpi stat-link" data-go="clients" style="text-align:left;width:100%;cursor:pointer"><div class="kicker"><span class="kicon">♙</span> Active Clients</div><strong>'+active+'</strong><small>'+rows.clients.length+' total client records</small></button>'+
 '<button class="rev-kpi stat-link" data-go="leads" style="text-align:left;width:100%;cursor:pointer"><div class="kicker"><span class="kicon">◉</span> Open Leads</div><strong>'+openLeads+'</strong><small>'+rows.leads.length+' total lead records</small></button>'+
@@ -252,7 +274,7 @@ const filter=$('revenueStatusFilter'),sort=$('revenueSort');const updateTable=()
 const add=$('addRevenueEntry');if(add)add.onclick=()=>{const el=$('revenueEntryEditor');el.innerHTML='<form id="revenueEntryForm" class="contact-form"><div class="bar"><h3>Add Revenue Entry</h3><span class="pill">PENDING VERIFICATION</span></div><div class="fields"><label><span>Closed Job / Revenue Description</span><input class="field" name="job_name" required maxlength="250" placeholder="Client or project name"></label><label><span>Closed Date</span><input class="field" name="closed_date" type="date" required></label><label><span>Revenue Amount ($)</span><input class="field" name="amount" type="number" min="0" step="0.01" required placeholder="0.00"></label></div><div class="actions"><button class="btn" id="saveRevenueEntry">Add Pending Entry</button><button type="button" class="btn alt" id="cancelRevenueEntry">Cancel</button></div></form>';$('cancelRevenueEntry').onclick=()=>el.innerHTML='';$('revenueEntryForm').onsubmit=async e=>{e.preventDefault();const b=$('saveRevenueEntry');b.disabled=true;try{const f=new FormData(e.target);await revenueApi('add_entry',{job_name:f.get('job_name'),closed_date:f.get('closed_date'),amount:Number(f.get('amount'))});await reloadRevenue();notify('Revenue entry added for verification.','good')}catch(err){notify(err.message,'error');b.disabled=false}}};
 attachPaymentButtons();
 }
-function attachDashboardEvents(){if(!myDashboardTasksLoaded)loadMyDashboardTasks();
+function attachDashboardEvents(){if(myDashboardTasksLoaded&&!myUpdatesLoaded)loadMyUpdates();\n const updateRefresh=$('refreshMyUpdates');if(updateRefresh)updateRefresh.onclick=()=>{myUpdatesLoaded=false;render();loadMyUpdates()};\n document.querySelectorAll('[data-myupdate]').forEach(b=>b.onclick=()=>openMyUpdate(b.dataset.myupdate,b.dataset.updateType));\nif(!myDashboardTasksLoaded)loadMyDashboardTasks();
  const reload=$('refreshMyTasks');if(reload)reload.onclick=()=>{myDashboardTasksLoaded=false;render();loadMyDashboardTasks()};
  document.querySelectorAll('[data-mytask]').forEach(b=>b.onclick=()=>openMyTaskClient(b.dataset.mytask));
  if(revenueGoalLoaded)showRevenueGoal();else loadRevenueGoal();
