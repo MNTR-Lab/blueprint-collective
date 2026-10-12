@@ -307,6 +307,18 @@ async function employeesApi(action,extra={}){
  const r=await fetch(URL+'/functions/v1/miners-employees',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action,organization_id:ORG,...extra})});
  const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Employee request failed');return d;
 }
+async function loadEmployeesIfAdmin(){
+ try{
+  const {data:{session}}=await db.auth.getSession();
+  if(!session)return;
+  const {data:member}=await db.from('memberships').select('role').eq('organization_id',ORG).eq('user_id',session.user.id).maybeSingle();
+  const role=String(member?.role||'').toLowerCase();
+  if(['admin','owner','organization_admin','org_admin'].includes(role)){await loadEmployees();return}
+  // Super admins without an organizational membership can still access the employee manager.
+  if(!role){await loadEmployees();return}
+  employeeAccess=false;employeeLoaded=true;
+ }catch(e){employeeAccess=false;employeeLoaded=true}
+}
 async function loadEmployees(){
  try{const d=await employeesApi('list');employeeRows=d.employees||[];employeeAccess=!!d.can_manage;employeeError='';}
  catch(e){employeeRows=[];employeeAccess=false;employeeError=e.message}
@@ -415,7 +427,7 @@ async function save(e){
  catch(err){notify('Could not save: '+err.message,'error');btn.disabled=false}
 }
 
-async function check(){try{const {data:{session}}=await db.auth.getSession();if(isActivationLink&&session&&!session.user?.user_metadata?.miners_password_set){$('login').classList.add('hidden');$('app').classList.add('hidden');$('passwordSetup').classList.remove('hidden');notify('Choose your password to activate your account');return;}if(!session){$('login').classList.remove('hidden');$('app').classList.add('hidden');notify('Sign in with your Wheeling Miners account');return}await api('list','clients');authorized=true;$('login').classList.add('hidden');$('app').classList.remove('hidden');$('logout').classList.remove('hidden');$('identity').textContent=session.user.email;await refresh();loadEmployees();loadMyDashboardTasks()}catch(e){authorized=false;$('app').classList.add('hidden');$('login').classList.remove('hidden');notify('Access restricted: '+e.message,'error')}}
+async function check(){try{const {data:{session}}=await db.auth.getSession();if(isActivationLink&&session&&!session.user?.user_metadata?.miners_password_set){$('login').classList.add('hidden');$('app').classList.add('hidden');$('passwordSetup').classList.remove('hidden');notify('Choose your password to activate your account');return;}if(!session){$('login').classList.remove('hidden');$('app').classList.add('hidden');notify('Sign in with your Wheeling Miners account');return}await api('list','clients');authorized=true;$('login').classList.add('hidden');$('app').classList.remove('hidden');$('logout').classList.remove('hidden');$('identity').textContent=session.user.email;await refresh();loadMyDashboardTasks();const {data:{user:currentUser}}=await db.auth.getUser();if(currentUser?.email){loadEmployeesIfAdmin()}}catch(e){authorized=false;$('app').classList.add('hidden');$('login').classList.remove('hidden');notify('Access restricted: '+e.message,'error')}}
 $('passwordSetupForm').onsubmit=async e=>{e.preventDefault();const p=$('newEmployeePassword').value;if(p!==$('confirmEmployeePassword').value){notify('Passwords do not match','error');return}const {error}=await db.auth.updateUser({password:p,data:{miners_password_set:true}});if(error){notify(error.message,'error');return}history.replaceState({},'',location.pathname);$('passwordSetup').classList.add('hidden');notify('Password created successfully','good');await check()};
 $('loginForm').onsubmit=async e=>{e.preventDefault();notify('Signing in…');const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('password').value='';if(error){notify(error.message,'error');return}await check()};
 $('logout').onclick=async()=>{await db.auth.signOut();authorized=false;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('logout').classList.add('hidden');notify('Signed out')};check();
