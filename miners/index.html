@@ -368,11 +368,38 @@ async function jobsApi(action,extra={}){
  const r=await fetch(URL+'/functions/v1/miners-jobs',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action,organization_id:ORG,...extra})});
  const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Job request failed');return d;
 }
-async function loadJobs(){
- try{const {data:{session}}=await db.auth.getSession();jobsSelfEmail=String(session?.user?.email||'').toLowerCase();const d=await jobsApi('list');jobsRows=d.jobs||[];jobsAdmin=!!d.can_manage;jobsError='';}
- catch(e){jobsError=e.message;jobsRows=[];}
- jobsLoaded=true;if(authorized&&(page==='jobs'||page==='dashboard'))render();
+let jobsRefreshBusy=false;
+function crmHasActiveEditor(){
+ const el=document.activeElement;
+ return !!editing||!!(el&&el.matches&&el.matches('input,textarea,select,[contenteditable="true"]'));
 }
+async function loadJobs(options={}){
+ if(jobsRefreshBusy)return;
+ jobsRefreshBusy=true;
+ const before=JSON.stringify(jobsRows);
+ try{const {data:{session}}=await db.auth.getSession();if(!session)return;
+  jobsSelfEmail=String(session.user?.email||'').toLowerCase();
+  const d=await jobsApi('list');jobsRows=d.jobs||[];jobsAdmin=!!d.can_manage;jobsError='';
+ }catch(e){jobsError=e.message;if(!options.silent)notify('Unable to refresh jobs: '+e.message,'error');}
+ finally{jobsRefreshBusy=false;jobsLoaded=true;}
+ if(authorized&&(page==='jobs'||page==='dashboard')&&(!options.silent||before!==JSON.stringify(jobsRows))&&!crmHasActiveEditor())render();
+}
+let crmPollBusy=false;
+async function refreshLiveWorkspace(){
+ if(!authorized||document.hidden||crmPollBusy||crmHasActiveEditor())return;
+ if(!['jobs','dashboard'].includes(page))return;
+ crmPollBusy=true;
+ try{
+  await loadJobs({silent:true});
+  if(page==='dashboard'){
+   await loadMyDashboardTasks();
+   if(myDashboardTasksLoaded)await loadMyUpdates();
+  }
+ }finally{crmPollBusy=false}
+}
+setInterval(refreshLiveWorkspace,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshLiveWorkspace()});
+
 function jobsPage(){
  const clientName=id=>(rows.clients||[]).find(x=>x.id===id)?.name||'Client';
  const selected=jobsRows.find(x=>x.id===jobsSelected);
@@ -439,7 +466,7 @@ function attachJobsEvents(){
  });
 }
 
-function render(){if(!authorized)return;if(((page==='revenue'||page==='payments')&&revenueGoalLoaded&&!revenueAccess)||(page==='employees'&&employeeLoaded&&!employeeAccess))page='dashboard';const nav=[['dashboard','Dashboard'],['leads','Leads'],['clients','Clients'],['pipeline','Sales Pipeline'],['jobs','Jobs & Projects'],...(revenueAccess?[['revenue','Revenue Goals'],['payments','Payments & Revenue Entries']]:[]),...(employeeAccess?[['employees','Employees & Access']]:[]),['monday','Organization Records']];$('nav').innerHTML=nav.map(([key,label])=>'<button class="nav '+(key===page?'active':'')+'" data-page="'+key+'">'+esc(label)+'</button>').join('');$('nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{page=b.dataset.page;editing=null;search='';render()});$('heading').textContent=page==='dashboard'?'Dashboard':page==='monday'?'Organization Records':page==='revenue'?'Revenue Goals & Performance':page==='payments'?'Payments & Revenue Entries':page==='employees'?'Employees & Access':page==='jobs'?'Jobs & Projects':sections[page];if(editing){$('app').innerHTML=form();$('cancel').onclick=$('cancel2').onclick=()=>{editing=null;render()};$('recordForm').onsubmit=save;if(editing.section==='pipeline'&&String(editing.record?.stage).toLowerCase()==='won')loadWonDocs(editing.id);return}
+function render(){if(!authorized)return;if(((page==='revenue'||page==='payments')&&revenueGoalLoaded&&!revenueAccess)||(page==='employees'&&employeeLoaded&&!employeeAccess))page='dashboard';const nav=[['dashboard','Dashboard'],['leads','Leads'],['clients','Clients'],['pipeline','Sales Pipeline'],['jobs','Jobs & Projects'],...(revenueAccess?[['revenue','Revenue Goals'],['payments','Payments & Revenue Entries']]:[]),...(employeeAccess?[['employees','Employees & Access']]:[]),['monday','Organization Records']];$('nav').innerHTML=nav.map(([key,label])=>'<button class="nav '+(key===page?'active':'')+'" data-page="'+key+'">'+esc(label)+'</button>').join('');$('nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{page=b.dataset.page;editing=null;search='';render();if(page==='jobs'||page==='dashboard')refreshLiveWorkspace()});$('heading').textContent=page==='dashboard'?'Dashboard':page==='monday'?'Organization Records':page==='revenue'?'Revenue Goals & Performance':page==='payments'?'Payments & Revenue Entries':page==='employees'?'Employees & Access':page==='jobs'?'Jobs & Projects':sections[page];if(editing){$('app').innerHTML=form();$('cancel').onclick=$('cancel2').onclick=()=>{editing=null;render()};$('recordForm').onsubmit=save;if(editing.section==='pipeline'&&String(editing.record?.stage).toLowerCase()==='won')loadWonDocs(editing.id);return}
 if(page==='dashboard')$('app').innerHTML=dashboardView();
 else if(page==='revenue')$('app').innerHTML=revenueDetailPage();
 else if(page==='payments')$('app').innerHTML=paymentsPage();
