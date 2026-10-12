@@ -340,14 +340,14 @@ function attachEmployeeEvents(){
  document.querySelectorAll('.employeeRemove').forEach(b=>b.onclick=async()=>{const u=employeeRows.find(x=>x.user_id===b.dataset.user);if(!u||!confirm('Remove Wheeling access for '+u.email+'?'))return;try{await employeesApi('deactivate',{user_id:u.user_id});notify('Wheeling access removed','success');await loadEmployees()}catch(e){notify(e.message,'error')}});
 }
 
-let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[];
+let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[],jobsSelfEmail='';
 async function jobsApi(action,extra={}){
  const {data:{session}}=await db.auth.getSession();if(!session)throw Error('Sign in required');
  const r=await fetch(URL+'/functions/v1/miners-jobs',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action,organization_id:ORG,...extra})});
  const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Job request failed');return d;
 }
 async function loadJobs(){
- try{const d=await jobsApi('list');jobsRows=d.jobs||[];jobsAdmin=!!d.can_manage;jobsError='';}
+ try{const {data:{session}}=await db.auth.getSession();jobsSelfEmail=String(session?.user?.email||'').toLowerCase();const d=await jobsApi('list');jobsRows=d.jobs||[];jobsAdmin=!!d.can_manage;jobsError='';}
  catch(e){jobsError=e.message;jobsRows=[];}
  jobsLoaded=true;if(authorized&&page==='jobs')render();
 }
@@ -357,7 +357,7 @@ function jobsPage(){
  let html='<div class="bar"><div><h2>Jobs & Projects</h2><p class="muted">Wheeling production jobs and approval requests</p></div><button class="btn alt" id="jobsRefresh">Refresh Jobs</button></div>';
  if(jobsError)html+='<div class="notice error">'+esc(jobsError)+'</div>';
  if(!jobsLoaded)return html+'<div class="panel">Loading jobs…</div>';
- if(jobsAdmin)html+='<div class="panel" style="margin-bottom:16px"><h3>Create New Job</h3><form id="jobsCreate"><div style="display:grid;gap:10px"><label>Job title<input class="field" name="title" required maxlength="250" placeholder="Job or project name"></label><label>Client<select class="field" name="client_id" required><option value="">Select client</option>'+(rows.clients||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Assign to employee email<input class="field" type="email" name="assigned_to" required placeholder="employee@example.com"></label><label>Description<textarea class="field" name="description" rows="3"></textarea></label><button class="btn" type="submit">Create Job</button></div></form></div>';
+ html+='<div class="panel" style="margin-bottom:16px"><h3>Create New Job</h3><form id="jobsCreate"><div style="display:grid;gap:10px"><label>Job title<input class="field" name="title" required maxlength="250" placeholder="Job or project name"></label><label>Client<select class="field" name="client_id" required><option value="">Select client</option>'+(rows.clients||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Assign to employee email<input class="field" type="email" name="assigned_to" required '+(jobsAdmin?'placeholder="employee@example.com"':'value="'+esc(jobsSelfEmail)+'" readonly')+'></label><label>Description<textarea class="field" name="description" rows="3"></textarea></label><button class="btn" type="submit">Create Job</button></div></form></div>';
  html+='<div class="panel"><h3>'+ (jobsAdmin?'All Jobs':'My Assigned Jobs')+' ('+jobsRows.length+')</h3>';
  html+=jobsRows.length?jobsRows.map(j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong><div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>').join(''):'<p class="muted">No jobs yet.</p>';
  html+='</div>';
