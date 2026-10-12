@@ -383,7 +383,7 @@ function jobsPage(){
  const archivedStatuses=['approved','completed'];
  const activeJobs=jobsRows.filter(j=>!archivedStatuses.includes(j.status));
  const archivedJobs=jobsRows.filter(j=>archivedStatuses.includes(j.status));
- const jobRow=j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong>'+(j.source_opportunity_id?'<span class="pill" style="margin-left:8px">'+(j.assigned_to?'From Sales Pipeline':'Ready to Fulfill')+'</span>':'')<div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>';
+ const jobRow=j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong>'+(j.source_opportunity_id?'<span class="pill" style="margin-left:8px">'+(j.assigned_to?'From Sales Pipeline':'Ready to Fulfill')+'</span>':'')+'<div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>';
  html+='<div class="panel"><h3>'+ (jobsAdmin?'Active Jobs & Approval Requests':'My Active Jobs')+' ('+activeJobs.length+')</h3>';
  html+=activeJobs.length?activeJobs.map(jobRow).join(''):'<p class="muted">No active jobs.</p>';
  html+='</div>';
