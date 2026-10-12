@@ -340,7 +340,7 @@ function attachEmployeeEvents(){
  document.querySelectorAll('.employeeRemove').forEach(b=>b.onclick=async()=>{const u=employeeRows.find(x=>x.user_id===b.dataset.user);if(!u||!confirm('Remove Wheeling access for '+u.email+'?'))return;try{await employeesApi('deactivate',{user_id:u.user_id});notify('Wheeling access removed','success');await loadEmployees()}catch(e){notify(e.message,'error')}});
 }
 
-let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[],jobsSelfEmail='',jobsNotes=[],jobsNotesExpanded=false;
+let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[],jobsSelfEmail='',jobsNotes=[],jobsNotesExpanded=false,jobsArchiveExpanded=false;
 async function jobsApi(action,extra={}){
  const {data:{session}}=await db.auth.getSession();if(!session)throw Error('Sign in required');
  const r=await fetch(URL+'/functions/v1/miners-jobs',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action,organization_id:ORG,...extra})});
@@ -358,9 +358,14 @@ function jobsPage(){
  if(jobsError)html+='<div class="notice error">'+esc(jobsError)+'</div>';
  if(!jobsLoaded)return html+'<div class="panel">Loading jobs…</div>';
  if(!selected)html+='<div class="panel" style="margin-bottom:16px"><h3>Create New Job</h3><form id="jobsCreate"><div style="display:grid;gap:10px"><label>Job title<input class="field" name="title" required maxlength="250" placeholder="Job or project name"></label><label>Client<select class="field" name="client_id" required><option value="">Select client</option>'+(rows.clients||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Assign to employee email<input class="field" type="email" name="assigned_to" required '+(jobsAdmin?'placeholder="employee@example.com"':'value="'+esc(jobsSelfEmail)+'" readonly')+'></label><label>Description<textarea class="field" name="description" rows="3"></textarea></label><button class="btn" type="submit">Create Job</button></div></form></div>';
- html+='<div class="panel"><h3>'+ (jobsAdmin?'All Jobs':'My Assigned Jobs')+' ('+jobsRows.length+')</h3>';
- html+=jobsRows.length?jobsRows.map(j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong><div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>').join(''):'<p class="muted">No jobs yet.</p>';
+ const archivedStatuses=jobsAdmin?['approved','completed']:['submitted','approved','completed'];
+ const activeJobs=jobsRows.filter(j=>!archivedStatuses.includes(j.status));
+ const archivedJobs=jobsRows.filter(j=>archivedStatuses.includes(j.status));
+ const jobRow=j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong><div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>';
+ html+='<div class="panel"><h3>'+ (jobsAdmin?'Active Jobs & Approval Requests':'My Active Jobs')+' ('+activeJobs.length+')</h3>';
+ html+=activeJobs.length?activeJobs.map(jobRow).join(''):'<p class="muted">No active jobs.</p>';
  html+='</div>';
+ html+='<div class="panel" style="margin-top:16px"><details id="jobsArchiveSection" '+(jobsArchiveExpanded?'open':'')+'><summary style="cursor:pointer;font-weight:700;font-size:16px">'+(jobsAdmin?'Approved & Completed Jobs':'Submitted & Archived Jobs')+' ('+archivedJobs.length+')</summary><div style="margin-top:12px">'+(archivedJobs.length?archivedJobs.map(jobRow).join(''):'<p class="muted">No archived jobs yet.</p>')+'</div></details></div>';
  if(selected){
   const st=selected.status;
   html+='<div class="panel" id="jobsDetailPanel" style="margin-top:16px"><div class="bar"><div><h3>'+esc(selected.title)+'</h3><p class="muted">'+esc(clientName(selected.client_id))+' · '+esc(st.replaceAll('_',' '))+'</p></div><button class="btn alt" id="jobsClose">Close</button></div><p>'+esc(selected.description||'No description yet.')+'</p><p class="muted">Assigned to: '+esc(selected.assigned_to||'Unassigned')+'</p>';
@@ -385,6 +390,7 @@ function attachJobsEvents(){
   try{const data=Object.fromEntries(new FormData(create).entries());const result=await jobsApi('create',data);notify('Job created');jobsSelected=result.id;await loadJobs();await openJob(result.id)}
   catch(err){notify(err.message,'error')}finally{btn.disabled=false}
  };
+ const archiveSection=$('jobsArchiveSection');if(archiveSection)archiveSection.ontoggle=()=>{jobsArchiveExpanded=archiveSection.open};
  const notesSection=$('jobNotesSection');if(notesSection)notesSection.ontoggle=()=>{jobsNotesExpanded=notesSection.open};
  const noteForm=$('jobNoteForm');if(noteForm)noteForm.onsubmit=async e=>{
   e.preventDefault();const note=String(new FormData(noteForm).get('note')||'').trim();if(!note)return;
