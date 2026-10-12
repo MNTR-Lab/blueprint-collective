@@ -191,7 +191,8 @@ function myUpdatesPanel(){
 async function openMyUpdate(id,type){
  page='clients';expandedClient=null;render();await openClient(id);clientTab=type==='note'?'notes':'tasks';await (type==='note'?loadJournal(id):loadTasks(id));render();
 }
-\nfunction myDashboardPanel(){
+
+function myDashboardPanel(){
  const pending=myDashboardTasks.filter(t=>t.status!=='completed');
  const completed=myDashboardTasks.filter(t=>t.status==='completed');
  const row=t=>{const c=rows.clients.find(x=>x.id===t.client_id);return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(t.title)+'</strong><div class="muted">'+esc(c?.name||'Client')+(t.due_date?' · Due '+esc(t.due_date):'')+' · '+esc(t.priority||'normal')+' priority</div></div><span class="pill">'+esc((t.status||'pending').replaceAll('_',' '))+'</span></div>'+(t.description?'<p class="journal-text">'+esc(t.description)+'</p>':'')+'<button class="btn alt" data-mytask="'+esc(t.client_id)+'">Open Task →</button></div>'};
