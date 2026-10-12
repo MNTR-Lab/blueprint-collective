@@ -179,10 +179,25 @@ function myNotificationPanel(){
  let read={};try{read=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
  const pending=myUpdates.filter(u=>!read[u.type+':'+u.id]);
  const row=u=>{const c=rows.clients.find(x=>x.id===u.client_id);return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(u.title)+'</strong><div class="muted">'+esc(c?.name||'Client')+' · '+esc(new Date(u.created_at).toLocaleDateString())+'</div></div><span class="pill">Needs review</span></div><div class="actions"><button class="btn alt" data-notify-open="'+esc(u.client_id)+'" data-notify-type="'+esc(u.type)+'">View →</button><button class="btn alt" data-notify-read="'+esc(u.type+':'+u.id)+'">Mark Reviewed</button></div></div>'};
- return '<section class="rev-panel" style="margin-bottom:17px"><div class="rev-table-head"><div><h3>Notifications Requiring Review</h3><p class="sub" style="margin:5px 0 0">Notes and task changes for your assigned clients · '+pending.length+' unreviewed</p></div></div>'+
- (!myUpdatesLoaded?'<p class="muted">Loading notifications…</p>':pending.length?pending.slice(0,20).map(row).join(''):'<p class="muted">No unreviewed notifications.</p>')+
- '<p class="muted" style="font-size:12px">Reviewed status is saved on this browser. Job approval requests will be connected separately.</p></section>';
+ const jobAlerts=jobsLoaded&&!jobsError?jobsRows.filter(j=>{
+   if(jobsAdmin)return j.status==='submitted';
+   if(j.status==='changes_requested')return true;
+   if(j.status==='approved')return !read['job-approved:'+j.id+':'+(j.updated_at||'')];
+   return false;
+ }):[];
+ const jobRow=j=>{
+   const submitted=jobsAdmin&&j.status==='submitted',changes=j.status==='changes_requested';
+   const label=submitted?'Approval requested':changes?'Changes requested':'Job approved';
+   const detail=submitted?'Review and approve this job or request changes.':changes?'Review feedback, make updates, and resubmit for approval.':'Your job was approved.';
+   const mark=(!submitted&&!changes)?'<button class="btn alt" data-job-notify-read="'+esc('job-approved:'+j.id+':'+(j.updated_at||''))+'">Mark Reviewed</button>':'';
+   return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(label)+': '+esc(j.title)+'</strong><div class="muted">'+esc(j.assigned_to||'')+' · '+esc(j.status.replaceAll('_',' '))+'</div><p class="muted">'+esc(detail)+'</p></div><span class="pill">Needs review</span></div><div class="actions"><button class="btn alt" data-job-notify-open="'+esc(j.id)+'">View Job →</button>'+mark+'</div></div>';
+ };
+ const total=pending.length+jobAlerts.length;
+ return '<section class="rev-panel" style="margin-bottom:17px"><div class="rev-table-head"><div><h3>Notifications Requiring Review</h3><p class="sub" style="margin:5px 0 0">Client notes, task changes, and job approvals · '+total+' requiring review</p></div></div>'+
+ (!myUpdatesLoaded&&!jobsLoaded?'<p class="muted">Loading notifications…</p>':total?(jobAlerts.map(jobRow).join('')+pending.slice(0,20).map(row).join('')):'<p class="muted">No unreviewed notifications.</p>')+
+ '<p class="muted" style="font-size:12px">Job requests requiring action stay visible until their status changes. Reviewed informational alerts are saved on this browser.</p></section>';
 }
+
 function myUpdatesPanel(){
  const item=u=>{const c=rows.clients.find(x=>x.id===u.client_id);return '<div class="journal-entry"><div class="bar"><div><strong>'+esc(u.title)+'</strong><div class="muted">'+esc(c?.name||'Client')+' · '+esc(u.author||'')+' · '+esc(new Date(u.created_at).toLocaleDateString())+'</div></div><span class="pill">'+(u.type==='note'?'Note':'Task update')+'</span></div>'+(u.detail?'<p class="journal-text">'+esc(u.detail)+'</p>':'')+'<button class="btn alt" data-myupdate="'+esc(u.client_id)+'" data-update-type="'+esc(u.type)+'">View '+(u.type==='note'?'Note':'Task')+' →</button></div>'};
  return '<section class="rev-panel" style="margin-bottom:17px"><div class="rev-table-head"><div><h3>My Updates &amp; Notes</h3><p class="sub" style="margin:5px 0 0">Updates on clients with tasks assigned to you</p></div><button class="btn alt" id="refreshMyUpdates">Refresh Updates ↻</button></div>'+
@@ -285,6 +300,13 @@ const add=$('addRevenueEntry');if(add)add.onclick=()=>{const el=$('revenueEntryE
 attachPaymentButtons();
 }
 function attachDashboardEvents(){
+ document.querySelectorAll('[data-job-notify-open]').forEach(b=>b.onclick=async()=>{
+  page='jobs';jobsSelected=null;render();await openJob(b.dataset.jobNotifyOpen);
+ });
+ document.querySelectorAll('[data-job-notify-read]').forEach(b=>b.onclick=()=>{
+  const key='miners-notifications-read-v1';let read={};try{read=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
+  read[b.dataset.jobNotifyRead]=true;localStorage.setItem(key,JSON.stringify(read));render();
+ });
  document.querySelectorAll('[data-notify-open]').forEach(b=>b.onclick=()=>openMyUpdate(b.dataset.notifyOpen,b.dataset.notifyType));
  document.querySelectorAll('[data-notify-read]').forEach(b=>b.onclick=()=>{
   const key='miners-notifications-read-v1';let read={};try{read=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
@@ -349,7 +371,7 @@ async function jobsApi(action,extra={}){
 async function loadJobs(){
  try{const {data:{session}}=await db.auth.getSession();jobsSelfEmail=String(session?.user?.email||'').toLowerCase();const d=await jobsApi('list');jobsRows=d.jobs||[];jobsAdmin=!!d.can_manage;jobsError='';}
  catch(e){jobsError=e.message;jobsRows=[];}
- jobsLoaded=true;if(authorized&&page==='jobs')render();
+ jobsLoaded=true;if(authorized&&(page==='jobs'||page==='dashboard'))render();
 }
 function jobsPage(){
  const clientName=id=>(rows.clients||[]).find(x=>x.id===id)?.name||'Client';
