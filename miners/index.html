@@ -340,7 +340,7 @@ function attachEmployeeEvents(){
  document.querySelectorAll('.employeeRemove').forEach(b=>b.onclick=async()=>{const u=employeeRows.find(x=>x.user_id===b.dataset.user);if(!u||!confirm('Remove Wheeling access for '+u.email+'?'))return;try{await employeesApi('deactivate',{user_id:u.user_id});notify('Wheeling access removed','success');await loadEmployees()}catch(e){notify(e.message,'error')}});
 }
 
-let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[],jobsSelfEmail='',jobsNotes=[];
+let jobsRows=[],jobsLoaded=false,jobsAdmin=false,jobsError='',jobsSelected=null,jobsHistory=[],jobsSelfEmail='',jobsNotes=[],jobsNotesExpanded=false;
 async function jobsApi(action,extra={}){
  const {data:{session}}=await db.auth.getSession();if(!session)throw Error('Sign in required');
  const r=await fetch(URL+'/functions/v1/miners-jobs',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action,organization_id:ORG,...extra})});
@@ -368,13 +368,13 @@ function jobsPage(){
   if(['draft','in_progress','changes_requested'].includes(st))html+='<button class="btn" data-job-action="submit">Submit for Approval</button> ';
   if(jobsAdmin&&st==='submitted')html+='<button class="btn" data-job-action="approve">Approve</button> <button class="btn alt" data-job-action="request_changes">Request Changes</button> ';
   if(jobsAdmin&&st==='approved')html+='<button class="btn" data-job-action="complete">Mark Completed</button>';
-  html+='<h4>Running Notes & Activity</h4><form id="jobNoteForm" style="margin:12px 0"><textarea class="field" name="note" rows="3" maxlength="10000" required placeholder="Add a progress update, discussion note, or next step…"></textarea><button class="btn" type="submit">Add Note</button></form>'+ (jobsNotes.length?jobsNotes.map(n=>'<div class="contact-row"><div><p>'+esc(n.body)+'</p><p class="muted">'+esc(n.author_email)+' · '+esc(new Date(n.created_at).toLocaleString())+'</p></div></div>').join(''):'<p class="muted">No running notes yet.</p>');
-  html+='<h4>Approval History</h4>'+(jobsHistory.length?jobsHistory.map(e=>'<div class="contact-row"><div><strong>'+esc(e.action.replaceAll('_',' '))+'</strong><p class="muted">'+esc(e.actor_email)+' · '+esc(new Date(e.created_at).toLocaleString())+'</p><p>'+esc(e.note||'')+'</p></div></div>').join(''):'<p class="muted">No approval events recorded.</p>')+'</div>';
+  html+='<details id="jobNotesSection" '+(jobsNotesExpanded?'open':'')+' style="margin-top:18px;border-top:1px solid #dbe2ea;padding-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:15px">Notes & Activity ('+(jobsNotes.length+jobsHistory.length)+')</summary><h4>Running Notes</h4><form id="jobNoteForm" style="margin:12px 0"><textarea class="field" name="note" rows="3" maxlength="10000" required placeholder="Add a progress update, discussion note, or next step…"></textarea><button class="btn" type="submit">Add Note</button></form>'+ (jobsNotes.length?jobsNotes.map(n=>'<div class="contact-row"><div><p>'+esc(n.body)+'</p><p class="muted">'+esc(n.author_email)+' · '+esc(new Date(n.created_at).toLocaleString())+'</p></div></div>').join(''):'<p class="muted">No running notes yet.</p>');
+  html+='<h4>Approval History</h4>'+(jobsHistory.length?jobsHistory.map(e=>'<div class="contact-row"><div><strong>'+esc(e.action.replaceAll('_',' '))+'</strong><p class="muted">'+esc(e.actor_email)+' · '+esc(new Date(e.created_at).toLocaleString())+'</p><p>'+esc(e.note||'')+'</p></div></div>').join('') :'<p class="muted">No approval events recorded.</p>')+'</details></div>';
  }
  return html;
 }
 async function openJob(id){
- jobsSelected=id;jobsHistory=[];jobsNotes=[];
+ if(jobsSelected!==id)jobsNotesExpanded=false;jobsSelected=id;jobsHistory=[];jobsNotes=[];
  try{const results=await Promise.all([jobsApi('history',{job_id:id}),jobsApi('notes_list',{job_id:id})]);jobsHistory=results[0].history||[];jobsNotes=results[1].notes||[]}catch(e){notify(e.message,'error')}
  if(page==='jobs'){render();requestAnimationFrame(()=>document.getElementById('jobsDetailPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));}
 }
@@ -385,14 +385,15 @@ function attachJobsEvents(){
   try{const data=Object.fromEntries(new FormData(create).entries());const result=await jobsApi('create',data);notify('Job created');jobsSelected=result.id;await loadJobs();await openJob(result.id)}
   catch(err){notify(err.message,'error')}finally{btn.disabled=false}
  };
+ const notesSection=$('jobNotesSection');if(notesSection)notesSection.ontoggle=()=>{jobsNotesExpanded=notesSection.open};
  const noteForm=$('jobNoteForm');if(noteForm)noteForm.onsubmit=async e=>{
   e.preventDefault();const note=String(new FormData(noteForm).get('note')||'').trim();if(!note)return;
   const btn=noteForm.querySelector('[type=submit]');btn.disabled=true;
-  try{await jobsApi('notes_add',{job_id:jobsSelected,note});notify('Note added');await openJob(jobsSelected)}
+  try{await jobsApi('notes_add',{job_id:jobsSelected,note});jobsNotesExpanded=true;notify('Note added');await openJob(jobsSelected)}
   catch(err){notify(err.message,'error')}finally{btn.disabled=false}
  };
  document.querySelectorAll('[data-job-open]').forEach(b=>b.onclick=()=>openJob(b.dataset.jobOpen));
- const close=$('jobsClose');if(close)close.onclick=()=>{jobsSelected=null;jobsHistory=[];jobsNotes=[];render()};
+ const close=$('jobsClose');if(close)close.onclick=()=>{jobsSelected=null;jobsHistory=[];jobsNotes=[];jobsNotesExpanded=false;render()};
  document.querySelectorAll('[data-job-action]').forEach(b=>b.onclick=async()=>{
   const action=b.dataset.jobAction;let note='';
   if(action==='request_changes'){const result=prompt('Explain the changes required:');if(result===null)return;note=result.trim();if(!note){notify('A reason is required','error');return}}
