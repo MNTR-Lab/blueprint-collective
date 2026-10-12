@@ -493,18 +493,52 @@ function attachJobsEvents(){
  });
 }
 
+function sponsorshipGroups(){
+ const groups=new Map();
+ rows.pipeline.filter(o=>o.stage==='won').forEach(o=>{
+  const client=rows.clients.find(c=>c.id===o.client_id);
+  const name=String(client?.name||o.title||'Unnamed Sponsor').trim();
+  const key=o.client_id?'client:'+o.client_id:'name:'+name.toLocaleLowerCase();
+  if(!groups.has(key))groups.set(key,{key,name,client,agreements:[],total:0});
+  const group=groups.get(key);group.agreements.push(o);group.total+=Number(o.amount||0);
+ });
+ return [...groups.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
 function sponsorshipAccountsPage(){
- const won=rows.pipeline.filter(o=>o.stage==='won').sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')));
- const total=won.reduce((sum,o)=>sum+Number(o.amount||0),0);
- return '<div class="bar"><div><h2>Sponsorship Accounts</h2><p class="muted">Manage signed sponsorships, game-day commitments, agreements and account notes. Accounts appear automatically when a Sales Pipeline opportunity is Won.</p></div><button class="btn alt" data-go="pipeline">View Sales Pipeline →</button></div>'+
- '<div class="rev-kpis" style="margin:18px 0"><div class="rev-kpi"><div class="kicker">Active Sponsorship Accounts</div><strong>'+won.length+'</strong><small>Won opportunities</small></div><div class="rev-kpi"><div class="kicker">Current Sponsorship</div><strong>'+revMoney(total)+'</strong><small>Total contracted sponsorship value</small></div></div>'+
- (won.length?'<div class="panel"><div class="rev-table-head"><div><h3>Current Sponsors</h3><p class="sub">Select an account to view commitments, agreements and notes</p></div></div><div class="scroll"><table><thead><tr><th>Sponsor / Opportunity</th><th>Package</th><th>Season</th><th>Agreement</th><th>Account</th></tr></thead><tbody>'+
- won.map(o=>{const c=rows.clients.find(c=>c.id===o.client_id);return '<tr><td><strong>'+esc(c?.name||o.title||'Sponsorship')+'</strong><div class="muted" style="font-size:12px">'+esc(o.title||'')+'</div></td><td>'+esc(o.package_name||'—')+'</td><td>'+esc(o.sponsorship_season||'—')+'</td><td>'+revMoney(o.amount)+'</td><td><button class="btn alt sponsor-open" data-id="'+esc(o.id)+'">Open Account →</button></td></tr>'}).join('')+'</tbody></table></div></div>':'<div class="panel"><h3>No Won sponsorships yet</h3><p class="muted">When a deal is marked Won in Sales Pipeline, it will automatically appear here.</p><button class="btn" data-go="pipeline">Go to Sales Pipeline</button></div>');
+ const groups=sponsorshipGroups();
+ const total=groups.reduce((sum,g)=>sum+g.total,0);
+ return '<div class="bar"><div><h2>Sponsorship Accounts</h2><p class="muted">One account per sponsor, with all Won sponsorship agreements organized inside. Sales Pipeline and accounting remain separate.</p></div><button class="btn alt" data-go="pipeline">View Sales Pipeline →</button></div>'+
+ '<div class="rev-kpis" style="margin:18px 0"><div class="rev-kpi"><div class="kicker">Active Sponsorship Accounts</div><strong>'+groups.length+'</strong><small>Unique sponsors</small></div><div class="rev-kpi"><div class="kicker">Current Sponsorship</div><strong>'+revMoney(total)+'</strong><small>Total contracted sponsorship value</small></div></div>'+
+ (groups.length?'<div class="panel"><div class="rev-table-head"><div><h3>Current Sponsors</h3><p class="sub">Open a sponsor to view every agreement in their account</p></div></div><div class="scroll"><table><thead><tr><th>Sponsor</th><th>Agreements</th><th>Total Sponsorship</th><th>Account</th></tr></thead><tbody>'+
+ groups.map((g,i)=>'<tr><td><strong>'+esc(g.name)+'</strong></td><td>'+g.agreements.length+' agreement'+(g.agreements.length===1?'':'s')+'</td><td><strong>'+revMoney(g.total)+'</strong></td><td><button class="btn alt sponsor-open" data-group="'+i+'">Open Account →</button></td></tr>').join('')+'</tbody></table></div></div>':'<div class="panel"><h3>No Won sponsorships yet</h3><p class="muted">When a deal is marked Won in Sales Pipeline, it will automatically appear here.</p><button class="btn" data-go="pipeline">Go to Sales Pipeline</button></div>');
+}
+function openSponsorAccount(group){
+ const overlay=document.createElement('div');
+ overlay.id='sponsorAccountOverlay';
+ overlay.style.cssText='position:fixed;inset:0;background:rgba(9,16,28,.78);z-index:9998;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto';
+ overlay.innerHTML='<div role="dialog" aria-modal="true" aria-label="Sponsorship account" style="background:#fff;color:#172033;border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:26px;box-shadow:0 20px 70px #0006">'+
+ '<div class="bar"><div><span style="color:#a47a22;font-size:12px;font-weight:800">SPONSORSHIP ACCOUNT</span><h2 style="margin:6px 0">'+esc(group.name)+'</h2><p class="muted">'+group.agreements.length+' Won agreement'+(group.agreements.length===1?'':'s')+' · Combined value '+revMoney(group.total)+'</p></div><button class="btn alt" id="closeSponsorAccount">Close</button></div>'+
+ '<div class="rev-kpis" style="margin:18px 0"><div class="rev-kpi"><div class="kicker">Current Sponsorship</div><strong>'+revMoney(group.total)+'</strong></div><div class="rev-kpi"><div class="kicker">Agreements</div><strong>'+group.agreements.length+'</strong></div></div>'+
+ '<h3>Agreements & Advertising Commitments</h3>'+
+ group.agreements.map(o=>'<div class="panel" style="margin:12px 0;padding:16px"><div class="bar"><div><strong>'+esc(o.title||'Sponsorship Agreement')+'</strong><p class="muted">'+esc(o.package_name||'Sponsorship')+' · '+esc(o.sponsorship_season||'Season not set')+'</p></div><strong>'+revMoney(o.amount)+'</strong></div>'+
+ '<div style="margin:10px 0"><span class="muted" style="font-size:12px">Game-Day Commitments</span><div style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(o.gameday_commitments||'No commitments recorded yet')+'</div></div>'+
+ '<button class="btn alt sponsor-agreement" data-id="'+esc(o.id)+'">View Agreement, Documents & Notes →</button></div>').join('')+
+ '<div class="actions" style="margin-top:16px"><button class="btn alt" id="closeSponsorAccount2">Close</button></div></div>';
+ document.body.appendChild(overlay);
+ const close=()=>overlay.remove();
+ $('closeSponsorAccount').onclick=close;
+ $('closeSponsorAccount2').onclick=close;
+ overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+ overlay.querySelectorAll('.sponsor-agreement').forEach(b=>b.onclick=()=>{
+  const o=group.agreements.find(x=>x.id===b.dataset.id);
+  if(o)showRecordView('pipeline',o);
+ });
 }
 function attachSponsorshipAccountsEvents(){
+ const groups=sponsorshipGroups();
  $('app').querySelectorAll('.sponsor-open').forEach(b=>b.onclick=()=>{
-  const o=rows.pipeline.find(x=>x.id===b.dataset.id&&x.stage==='won');
-  if(o)showRecordView('pipeline',o);
+  const group=groups[Number(b.dataset.group)];
+  if(group)openSponsorAccount(group);
  });
  $('app').querySelectorAll('[data-go="pipeline"]').forEach(b=>b.onclick=()=>{page='pipeline';editing=null;search='';render()});
 }
