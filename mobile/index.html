@@ -35,7 +35,10 @@ async function route(){show('loading-view');try{
  // A user with one organization is routed directly. Never show other organizations.
  if(!data.platform_super_admin&&orgs.length===1){openWorkspace(target(orgs[0]));return}
  $('workspaces').replaceChildren();
- if(data.platform_super_admin)addWorkspace('Blueprint Collective — Platform Administration','/super-admin.html');
+ if(data.platform_super_admin){
+  addWorkspace('Blueprint Collective — Platform Administration','/super-admin.html');
+  addWorkspace('Wheeling Miners — Primary Miner','/miners/owner-test.html');
+ }
  for(const o of orgs)addWorkspace(o.name,target(o));
  if(!data.platform_super_admin&&!orgs.length){$('choose-status').textContent='No organization is assigned to your account. Contact your administrator.'}
  show('choose-view');
