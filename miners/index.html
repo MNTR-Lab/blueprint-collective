@@ -523,11 +523,28 @@ function openSponsorAccount(group){
  group.agreements.map(o=>'<div class="panel" style="margin:12px 0;padding:16px"><div class="bar"><div><strong>'+esc(o.title||'Sponsorship Agreement')+'</strong><p class="muted">'+esc(o.package_name||'Sponsorship')+' · '+esc(o.sponsorship_season||'Season not set')+'</p></div><strong>'+revMoney(o.amount)+'</strong></div>'+
  '<div style="margin:10px 0"><span class="muted" style="font-size:12px">Game-Day Commitments</span><div style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(o.gameday_commitments||'No commitments recorded yet')+'</div></div>'+
  '<button class="btn alt sponsor-agreement" data-id="'+esc(o.id)+'">View Agreement, Documents & Notes →</button></div>').join('')+
- '<div class="actions" style="margin-top:16px"><button class="btn alt" id="closeSponsorAccount2">Close</button></div></div>';
+ '<div class="actions" style="margin-top:16px"><button class="btn" id="createSponsorOpportunity">+ Create New Opportunity</button><button class="btn alt" id="closeSponsorAccount2">Close</button></div></div>';
  document.body.appendChild(overlay);
  const close=()=>overlay.remove();
  $('closeSponsorAccount').onclick=close;
  $('closeSponsorAccount2').onclick=close;
+ $('createSponsorOpportunity').onclick=()=>{
+  const clientId=group.client?.id||group.agreements.find(o=>o.client_id)?.client_id||'';
+  if(!clientId){notify('Link this sponsor to a Client record first so new opportunities stay grouped under the same account. Open an existing agreement and select Sponsor / Client.','error');return;}
+  close();
+  page='pipeline';
+  search='';
+  editing={section:'pipeline',id:null,record:{
+   client_id:clientId,
+   title:group.name+' — New Sponsorship Opportunity',
+   stage:'new',
+   amount:0,
+   sponsorship_season:'',
+   package_name:'',
+   notes:''
+  }};
+  render();
+ };
  overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
  overlay.querySelectorAll('.sponsor-agreement').forEach(b=>b.onclick=()=>{
   const o=group.agreements.find(x=>x.id===b.dataset.id);
