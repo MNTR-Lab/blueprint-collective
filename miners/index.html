@@ -357,13 +357,13 @@ function jobsPage(){
  let html='<div class="bar"><div><h2>Jobs & Projects</h2><p class="muted">Wheeling production jobs and approval requests</p></div><button class="btn alt" id="jobsRefresh">Refresh Jobs</button></div>';
  if(jobsError)html+='<div class="notice error">'+esc(jobsError)+'</div>';
  if(!jobsLoaded)return html+'<div class="panel">Loading jobs…</div>';
- html+='<div class="panel" style="margin-bottom:16px"><h3>Create New Job</h3><form id="jobsCreate"><div style="display:grid;gap:10px"><label>Job title<input class="field" name="title" required maxlength="250" placeholder="Job or project name"></label><label>Client<select class="field" name="client_id" required><option value="">Select client</option>'+(rows.clients||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Assign to employee email<input class="field" type="email" name="assigned_to" required '+(jobsAdmin?'placeholder="employee@example.com"':'value="'+esc(jobsSelfEmail)+'" readonly')+'></label><label>Description<textarea class="field" name="description" rows="3"></textarea></label><button class="btn" type="submit">Create Job</button></div></form></div>';
+ if(!selected)html+='<div class="panel" style="margin-bottom:16px"><h3>Create New Job</h3><form id="jobsCreate"><div style="display:grid;gap:10px"><label>Job title<input class="field" name="title" required maxlength="250" placeholder="Job or project name"></label><label>Client<select class="field" name="client_id" required><option value="">Select client</option>'+(rows.clients||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select></label><label>Assign to employee email<input class="field" type="email" name="assigned_to" required '+(jobsAdmin?'placeholder="employee@example.com"':'value="'+esc(jobsSelfEmail)+'" readonly')+'></label><label>Description<textarea class="field" name="description" rows="3"></textarea></label><button class="btn" type="submit">Create Job</button></div></form></div>';
  html+='<div class="panel"><h3>'+ (jobsAdmin?'All Jobs':'My Assigned Jobs')+' ('+jobsRows.length+')</h3>';
  html+=jobsRows.length?jobsRows.map(j=>'<div class="contact-row"><div><strong>'+esc(j.title)+'</strong><div class="muted">'+esc(clientName(j.client_id))+' · '+esc(j.status.replaceAll('_',' '))+'</div><div class="muted">Assigned: '+esc(j.assigned_to||'Unassigned')+'</div></div><button class="btn alt" data-job-open="'+esc(j.id)+'">View Job</button></div>').join(''):'<p class="muted">No jobs yet.</p>';
  html+='</div>';
  if(selected){
   const st=selected.status;
-  html+='<div class="panel" style="margin-top:16px"><div class="bar"><div><h3>'+esc(selected.title)+'</h3><p class="muted">'+esc(clientName(selected.client_id))+' · '+esc(st.replaceAll('_',' '))+'</p></div><button class="btn alt" id="jobsClose">Close</button></div><p>'+esc(selected.description||'No description yet.')+'</p><p class="muted">Assigned to: '+esc(selected.assigned_to||'Unassigned')+'</p>';
+  html+='<div class="panel" id="jobsDetailPanel" style="margin-top:16px"><div class="bar"><div><h3>'+esc(selected.title)+'</h3><p class="muted">'+esc(clientName(selected.client_id))+' · '+esc(st.replaceAll('_',' '))+'</p></div><button class="btn alt" id="jobsClose">Close</button></div><p>'+esc(selected.description||'No description yet.')+'</p><p class="muted">Assigned to: '+esc(selected.assigned_to||'Unassigned')+'</p>';
   if(st==='draft')html+='<button class="btn alt" data-job-action="start">Start Work</button> ';
   if(['draft','in_progress','changes_requested'].includes(st))html+='<button class="btn" data-job-action="submit">Submit for Approval</button> ';
   if(jobsAdmin&&st==='submitted')html+='<button class="btn" data-job-action="approve">Approve</button> <button class="btn alt" data-job-action="request_changes">Request Changes</button> ';
@@ -375,7 +375,7 @@ function jobsPage(){
 async function openJob(id){
  jobsSelected=id;jobsHistory=[];
  try{jobsHistory=(await jobsApi('history',{job_id:id})).history||[]}catch(e){notify(e.message,'error')}
- if(page==='jobs')render();
+ if(page==='jobs'){render();requestAnimationFrame(()=>document.getElementById('jobsDetailPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));}
 }
 function attachJobsEvents(){
  const refresh=$('jobsRefresh');if(refresh)refresh.onclick=loadJobs;
