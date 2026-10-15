@@ -1,4 +1,4 @@
-\
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -457,6 +457,15 @@ async function route() {
 
       return;
     }
+
+    // Alphabetize all workspace options by their visible names.
+    const workspaceList = $('workspaces');
+    const sortedWorkspaces = Array.from(workspaceList.children).sort((a, b) => {
+      const aName = a.querySelector('strong')?.textContent?.trim() || '';
+      const bName = b.querySelector('strong')?.textContent?.trim() || '';
+      return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+    });
+    workspaceList.replaceChildren(...sortedWorkspaces);
 
     view('chooser');
 
