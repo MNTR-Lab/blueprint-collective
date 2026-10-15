@@ -1,4 +1,4 @@
-
+\
 <!doctype html>
 <html lang="en">
 <head>
@@ -392,6 +392,13 @@ async function route() {
 
     const orgs = data.organizations || [];
 
+    // Hide the legacy GOAT Sports organization workspace from this selector.
+    // The current GOAT Sports Operations CRM is linked separately above.
+    // No organization records or user permissions are deleted.
+    const visibleOrgs = orgs.filter(o =>
+      !/^goat\s*sports$/i.test(String(o.name || '').trim())
+    );
+
     // PLATFORM SUPER ADMIN
     if (data.platform_super_admin) {
 
@@ -425,7 +432,7 @@ async function route() {
     }
 
     // ORGANIZATION WORKSPACES
-    for (const o of orgs) {
+    for (const o of visibleOrgs) {
       const target =
         o.role === 'admin' ? '/index.html' : '/employee.html';
 
@@ -438,8 +445,8 @@ async function route() {
       );
     }
 
-    if (!data.platform_super_admin && orgs.length === 1) {
-      const o = orgs[0];
+    if (!data.platform_super_admin && visibleOrgs.length === 1) {
+      const o = visibleOrgs[0];
 
       location.replace(
         (o.role === 'admin'
@@ -454,7 +461,7 @@ async function route() {
     view('chooser');
 
     $('chooseError').textContent =
-      !data.platform_super_admin && !orgs.length
+      !data.platform_super_admin && !visibleOrgs.length
         ? 'No organization is assigned to this account. Contact your administrator.'
         : '';
 
