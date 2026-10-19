@@ -746,7 +746,7 @@ async function checkBudgetAdmin(){
  budgetAdmin=!error&&data===true;return budgetAdmin;
 }
 const budgetCurrency=n=>Number(n||0).toLocaleString('en-US',{style:'currency',currency:'USD'});
-async function budgetOverviewPage(){return '<div class="bar"><div><h2>Budgets &amp; Cost Analysis</h2><p class="muted">Private sponsorship fulfillment costs · Admin / ownership only</p></div></div><div id="budgetOverviewContent" class="panel"><p class="muted">Loading sponsorship budgets…</p></div>';}
+function budgetOverviewPage(){return '<div class="bar"><div><h2>Budgets &amp; Cost Analysis</h2><p class="muted">Private sponsorship fulfillment costs · Admin / ownership only</p></div></div><div id="budgetOverviewContent" class="panel"><p class="muted">Loading sponsorship budgets…</p></div>';}
 async function loadBudgetOverview(){
  const target=$('budgetOverviewContent');if(!target)return;
  if(!await checkBudgetAdmin()){target.innerHTML='<p>Super Admin or organization administrator access required.</p>';return;}
