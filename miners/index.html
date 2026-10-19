@@ -730,8 +730,8 @@ let budgetAdmin=false;
 async function checkBudgetAdmin(){
  const {data:{user}}=await db.auth.getUser();
  if(!user)return false;
- const {data,error}=await db.from('memberships').select('role').eq('organization_id',ORG).eq('user_id',user.id).eq('role','admin').maybeSingle();
- budgetAdmin=!error&&!!data;return budgetAdmin;
+ const {data,error}=await db.rpc('miners_budget_is_admin',{p_org:ORG});
+ budgetAdmin=!error&&data===true;return budgetAdmin;
 }
 const budgetCurrency=n=>Number(n||0).toLocaleString('en-US',{style:'currency',currency:'USD'});
 async function showBudgetEditor(opportunityId){
