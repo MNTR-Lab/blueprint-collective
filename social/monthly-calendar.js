@@ -1,4 +1,4 @@
-// Blueprint Social Studio V24 — Monthly Content Calendar with day details (read-only)
+// Blueprint Social Studio V31 — Monthly Content Calendar with day details (read-only)
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const BASE='https://lbheezjanvalalinqxcd.supabase.co';
 const KEY='sb_publishable_PVlEl61mo7WEm_0AiaIMAw_Us8xIXqC';
@@ -71,7 +71,8 @@ function drawDetails(){
  title.textContent='Scheduled posts · '+selectedDay;
  const items=posts.filter(relevant).filter(p=>String(p.publish_at_et||'').startsWith(selectedDay));
  if(!items.length){body.innerHTML='<div class="bp-month-details-empty">No posts scheduled for this day.</div>';return;}
- body.innerHTML=items.map(p=>`<div class="bp-month-details-item"><strong>${esc(p.title||'Untitled post')}</strong><small>${esc(p.organization_slug||'')} · ${esc(p.platform||'No platform')} · ${esc(p.approval||'Unknown status')} · ${esc(p.publish_at_et||'')}</small></div>`).join('');
+ const master=Boolean($('accessBadge')?.textContent.includes('MASTER'));
+ body.innerHTML=items.map(p=>`<div class="bp-month-details-item"><strong>${esc(p.title||'Untitled post')}</strong><small>${esc(p.organization_slug||'')} · ${esc(p.platform||'No platform')} · ${esc(p.approval||'Unknown status')} · ${esc(p.publish_at_et||'')}</small>${master&&p.monday_id?`<button type="button" class="bp-month-edit" data-edit-id="${esc(p.monday_id)}">✎ Edit Post</button>`:''}</div>`).join('');
 }
 async function refresh(){
  if(loading||$('app')?.hidden)return;loading=true;const current=++sequence;
@@ -87,6 +88,8 @@ async function refresh(){
 function init(){
  if(initialized)return;const desk=$('desk'),app=$('app');if(!desk||!app)return;initialized=true;
  panel.addEventListener('click',e=>{
+  const edit=e.target.closest('[data-edit-id]');
+  if(edit){e.preventDefault();if($('accessBadge')?.textContent.includes('MASTER'))window.dispatchEvent(new CustomEvent('blueprint:edit-post',{detail:{monday_id:edit.dataset.editId}}));return;}
   const day=e.target.closest('[data-date]');
   if(day){selectedDay=day.dataset.date;draw();return;}
   const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;
@@ -105,3 +108,6 @@ function init(){
  draw();if(!app.hidden)refresh();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+
+// V31 edit button styling
+const v31style=document.createElement('style');v31style.textContent='.bp-month-edit{margin-top:8px;padding:7px 10px;border:1px solid #bad1ee;background:#edf5ff;color:#174c91;border-radius:8px;font-weight:750;cursor:pointer}';document.head.append(v31style);
