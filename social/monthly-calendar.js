@@ -1,4 +1,4 @@
-// Blueprint Social Studio V23 — Monthly Content Calendar (read-only)
+// Blueprint Social Studio V24 — Monthly Content Calendar with day details (read-only)
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const BASE='https://lbheezjanvalalinqxcd.supabase.co';
 const KEY='sb_publishable_PVlEl61mo7WEm_0AiaIMAw_Us8xIXqC';
@@ -14,15 +14,19 @@ css.textContent=`
 .bp-month-day{min-height:108px;min-width:0;border:1px solid #e0e9f4;border-radius:10px;background:#f9fbff;padding:8px;overflow:hidden}
 .bp-month-day.outside{background:#f5f6f8;opacity:.45}.bp-month-day.today{border:2px solid #2b69c8;background:#f0f6ff}
 .bp-month-number{font-size:12px;color:#2a496d;font-weight:850}.bp-month-count{float:right;font-size:10px;color:#6881a0}
-.bp-month-post{display:block;margin-top:5px;border-radius:6px;padding:5px 6px;background:#eaf2ff;color:#204c82;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bp-month-day[data-date]{cursor:pointer}.bp-month-day[data-date]:hover,.bp-month-day[data-date]:focus-visible{border-color:#3779ce;outline:2px solid #3779ce33}.bp-month-day.is-selected{border:2px solid #2865b9;background:#eaf3ff}
+.bp-month-details{margin-top:15px;padding:15px;background:#f7faff;border:1px solid #dbe6f5;border-radius:12px}
+.bp-month-details h3{font-size:15px;color:#193b64;margin:0 0 9px}.bp-month-details-item{background:white;border:1px solid #e1e8f3;padding:11px;border-radius:9px;margin-top:8px}
+.bp-month-details-item strong{display:block;color:#214469;font-size:13px}.bp-month-details-item small{display:block;color:#647d98;font-size:11px;margin-top:5px}
+.bp-month-details-empty{font-size:12px;color:#657c96}.bp-month-post{display:block;margin-top:5px;border-radius:6px;padding:5px 6px;background:#eaf2ff;color:#204c82;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bp-month-post.pending{background:#fff3d9;color:#8b5a0a}.bp-month-post.draft{background:#edf0f5;color:#56657a}
 .bp-month-more{font-size:10px;color:#607894;margin-top:5px}.bp-month-status{font-size:11px;color:#637995}
 @media(max-width:850px){.bp-month-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.bp-month-day{min-height:68px;padding:4px}.bp-month-post{font-size:9px;padding:3px}.bp-month-dow{font-size:9px}}
 @media(max-width:500px){.bp-month-post{display:none}.bp-month-day{min-height:48px}.bp-month-count{float:none;display:block}}
 `;document.head.append(css);
 const panel=document.createElement('section');panel.className='bp-month';panel.hidden=true;
-panel.innerHTML=`<div class="bp-month-top"><div><h2>Monthly content calendar</h2><p>View the full month and spot days with no scheduled posts.</p></div><div class="bp-month-controls"><button type="button" data-action="prev" aria-label="Previous month">←</button><strong class="bp-month-title"></strong><button type="button" data-action="next" aria-label="Next month">→</button><button type="button" data-action="today">Current month</button><button type="button" data-action="refresh">↻ Refresh</button></div></div><div class="bp-month-grid"></div><p class="bp-month-status" role="status"></p>`;
-let posts=[],loading=false,initialized=false,sequence=0;
+panel.innerHTML=`<div class="bp-month-top"><div><h2>Monthly content calendar</h2><p>View the full month and spot days with no scheduled posts.</p></div><div class="bp-month-controls"><button type="button" data-action="prev" aria-label="Previous month">←</button><strong class="bp-month-title"></strong><button type="button" data-action="next" aria-label="Next month">→</button><button type="button" data-action="today">Current month</button><button type="button" data-action="refresh">↻ Refresh</button></div></div><div class="bp-month-grid"></div><div class="bp-month-details" aria-live="polite"><h3>Day details</h3><div class="bp-month-details-body">Select a day to view its scheduled posts.</div></div><p class="bp-month-status" role="status"></p>`;
+let posts=[],loading=false,initialized=false,sequence=0,selectedDay=null;
 function etParts(date){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(date).reduce((a,p)=>(a[p.type]=p.value,a),{});}
 const todayParts=etParts(new Date());const todayKey=[todayParts.year,todayParts.month.padStart(2,'0'),todayParts.day.padStart(2,'0')].join('-');
 let year=+todayParts.year,month=+todayParts.month-1;
@@ -53,11 +57,21 @@ function draw(){
   if(!inside){html+='<div class="bp-month-day outside" aria-hidden="true"></div>';continue;}
   const key=iso(year,month,d),items=buckets.get(key)||[];
   const labels=items.slice(0,3).map(p=>`<span class="bp-month-post ${p.approval==='Pending Review'?'pending':p.approval==='Draft'?'draft':''}" title="${esc(p.title)} — ${esc(p.organization_slug)}">${esc(p.title||'Untitled')}</span>`).join('');
-  html+=`<div class="bp-month-day ${key===todayKey?'today':''}" aria-label="${esc(key)}, ${items.length} scheduled posts"><span class="bp-month-number">${d}</span><span class="bp-month-count">${items.length?items.length+' posts':''}</span>${labels}${items.length>3?`<div class="bp-month-more">+${items.length-3} more</div>`:''}</div>`;
+  html+=`<div role="button" tabindex="0" data-date="${key}" class="bp-month-day ${key===selectedDay?'is-selected':''} ${key===todayKey?'today':''}" aria-label="${esc(key)}, ${items.length} scheduled posts"><span class="bp-month-number">${d}</span><span class="bp-month-count">${items.length?items.length+' posts':''}</span>${labels}${items.length>3?`<div class="bp-month-more">+${items.length-3} more</div>`:''}</div>`;
  }
  grid.innerHTML=html;
+ drawDetails();
  const total=[...buckets.entries()].filter(([key])=>key.startsWith(iso(year,month,1).slice(0,7))).reduce((n,[,items])=>n+items.length,0);
  panel.querySelector('.bp-month-status').textContent=`${total} scheduled posts this month · Counts reflect your authorized organizations.`;
+}
+function drawDetails(){
+ const body=panel.querySelector('.bp-month-details-body');
+ const title=panel.querySelector('.bp-month-details h3');
+ if(!selectedDay){title.textContent='Day details';body.textContent='Select a day to view its scheduled posts.';return;}
+ title.textContent='Scheduled posts · '+selectedDay;
+ const items=posts.filter(relevant).filter(p=>String(p.publish_at_et||'').startsWith(selectedDay));
+ if(!items.length){body.innerHTML='<div class="bp-month-details-empty">No posts scheduled for this day.</div>';return;}
+ body.innerHTML=items.map(p=>`<div class="bp-month-details-item"><strong>${esc(p.title||'Untitled post')}</strong><small>${esc(p.organization_slug||'')} · ${esc(p.platform||'No platform')} · ${esc(p.approval||'Unknown status')} · ${esc(p.publish_at_et||'')}</small></div>`).join('');
 }
 async function refresh(){
  if(loading||$('app')?.hidden)return;loading=true;const current=++sequence;
@@ -73,12 +87,15 @@ async function refresh(){
 function init(){
  if(initialized)return;const desk=$('desk'),app=$('app');if(!desk||!app)return;initialized=true;
  panel.addEventListener('click',e=>{
+  const day=e.target.closest('[data-date]');
+  if(day){selectedDay=day.dataset.date;draw();return;}
   const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;
   if(action==='refresh'){refresh();return;}
-  if(action==='today'){year=+todayParts.year;month=+todayParts.month-1;}
-  else{const d=new Date(Date.UTC(year,month+(action==='next'?1:-1),1));year=d.getUTCFullYear();month=d.getUTCMonth();}
+  if(action==='today'){year=+todayParts.year;month=+todayParts.month-1;selectedDay=null;}
+  else{const d=new Date(Date.UTC(year,month+(action==='next'?1:-1),1));year=d.getUTCFullYear();month=d.getUTCMonth();selectedDay=null;}
   draw();
  });
+ panel.querySelector('.bp-month-grid').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-date]')){e.preventDefault();selectedDay=e.target.dataset.date;draw();panel.querySelector(`[data-date="${selectedDay}"]`)?.focus();}});
  $('orgFilter')?.addEventListener('change',draw);
  $('refresh')?.addEventListener('click',()=>setTimeout(refresh,300));
  $('signOut')?.addEventListener('click',()=>{posts=[];panel.hidden=true;});
