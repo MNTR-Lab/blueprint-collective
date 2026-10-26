@@ -1,22 +1,22 @@
-// Blueprint Social Studio V34 — compact accordion publishing workspace
+// Blueprint Social Studio V36 — compact accordion publishing workspace
 // UI only: does not modify records, roles, approvals or publishing status.
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id);
 const groups=[
- ['.bp-month','Monthly calendar','Calendar',false],
- ['.bp-week','Weekly planner','Calendar',true],
- ['.bp-runsheet','Daily publishing run sheet','Daily work',false],
+ ['.bp-week','Weekly publishing planner','Calendar',true],
+ ['.bp-month','Monthly calendar','Calendar',true],
+ ['.bp-runsheet','Daily publishing run sheet','Daily work',true],
  ['.bp-handoff','Publishing handoff','Daily work',true],
  ['.bp-finder','Find & edit content','Content tools',true],
  ['.bp-flow','Publishing workflow','Content tools',true],
  ['.bp-approval','Approval queue','Approvals',true],
  ['.bp-clientvis','Client calendar visibility','Approvals',true],
  ['.bp-attention','Publishing attention','Approvals',true],
- ['.bp-readiness','Readiness checklist','Approvals',true],
+ ['.bp-ready','Readiness checklist','Approvals',true],
  ['.bp-health','Schedule health','Reports',true],
  ['.bp-coverage','Content coverage','Reports',true],
- ['.bp-briefing','Weekly briefing','Reports',true],
+ ['.bp-brief','Weekly briefing','Reports',true],
  ['.bp-export','CSV export','Reports',true]
 ];
 const css=document.createElement('style');css.textContent=`
@@ -43,7 +43,7 @@ const tabs=document.createElement('nav');tabs.className='bp-workspace-tabs';tabs
 const categories=['Calendar','Daily work','Content tools','Approvals','Reports'];
 let category='Calendar';try{const saved=localStorage.getItem('bp-v34-category');if(categories.includes(saved))category=saved;}catch(_){}
 tabs.innerHTML=categories.map(c=>`<button type="button" data-category="${c}" ${c===category?'class="active" aria-current="page"':''}>${c}</button>`).join('');
-function foldKey(name){return 'bp-v34-fold-'+name;}
+function foldKey(name){return 'bp-v36-fold-'+name;}
 function setFold(section,name,fold){
  section.classList.toggle('bp-folded',fold);
  const btn=section.querySelector(':scope > .bp-fold-toggle');
@@ -52,7 +52,10 @@ function setFold(section,name,fold){
 }
 function mount(){
  const desk=$('desk');if(!desk)return;
- if(!bar.isConnected){const anchor=desk.querySelector('.section-top');anchor?anchor.before(bar):desk.prepend(bar);}
+ // Place the weekly planner directly above the monthly calendar.
+ const weekly=desk.querySelector('.bp-week'),monthly=desk.querySelector('.bp-month');
+ if(weekly&&monthly&&weekly.parentElement===monthly.parentElement&&weekly.compareDocumentPosition(monthly)&Node.DOCUMENT_POSITION_PRECEDING){monthly.before(weekly);}
+ if(!bar.isConnected){const old=desk.querySelector('.bp-organizer');if(old&&old!==bar)old.remove();const anchor=desk.querySelector('.section-top');anchor?anchor.before(bar):desk.prepend(bar);}
  if(!tabs.isConnected)bar.after(tabs);
  for(const [selector,name,group,defaultFold] of groups){
   const section=desk.querySelector(selector);if(!section)continue;
@@ -78,7 +81,7 @@ function mount(){
   if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current');
  }
 }
-tabs.addEventListener('click',e=>{const c=e.target.closest('[data-category]')?.dataset.category;if(!categories.includes(c))return;category=c;try{localStorage.setItem('bp-v34-category',c);}catch(_){}mount();});
+tabs.addEventListener('click',e=>{const c=e.target.closest('[data-category]')?.dataset.category;if(!categories.includes(c))return;category=c;try{localStorage.setItem('bp-v34-category',c);}catch(_){}mount();tabs.scrollIntoView({behavior:'smooth',block:'start'});});
 bar.addEventListener('click',e=>{
  const mode=e.target.closest('[data-mode]')?.dataset.mode;if(!mode)return;
  for(const [selector,name,group,defaultFold] of groups){
