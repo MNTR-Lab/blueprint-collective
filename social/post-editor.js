@@ -13,6 +13,19 @@ const form=$('bp-form'),status=shell.querySelector('.bp-status'),save=shell.quer
 function orgs(){return [...$('orgFilter').options].filter(o=>o.value).map(o=>({slug:o.value,name:o.textContent}));}
 function canEdit(){return !$('app').hidden&&$('accessBadge')?.textContent.includes('MASTER');}
 function open(post){if(!canEdit())return;currentId=post?.monday_id||'';form.reset();form.elements.organization_slug.innerHTML=orgs().map(o=>`<option value="${o.slug.replaceAll('"','&quot;')}">${o.name.replaceAll('<','&lt;')}</option>`).join('');for(const field of form.elements){if(field.name&&post&&Object.hasOwn(post,field.name)){if(field.type==='checkbox')field.checked=!!post[field.name];else field.value=post[field.name]??'';}}if(!post){form.elements.organization_slug.value=$('orgFilter').value||orgs()[0]?.slug||'';form.elements.approval.value='Draft';form.elements.content_role.value='Main Post';form.elements.asset_type.value='Image';}shell.querySelector('#bp-title').textContent=post?'Edit post':'Create post';status.textContent='';status.classList.remove('bad');shell.hidden=false;document.body.style.overflow='hidden';form.elements.title.focus();}
+// V31: Calendar entries can open the same editor as the publishing cards.
+window.addEventListener('blueprint:edit-post',async event=>{
+ if(!canEdit())return;
+ const id=String(event.detail?.monday_id||'');if(!id)return;
+ try{
+  const {data:{session}}=await db.auth.getSession();if(!session)throw Error('Please sign in again.');
+  const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'bootstrap'})});
+  const data=await r.json();if(!r.ok||data.error)throw Error(data.error||'Unable to retrieve post');
+  const post=(Array.isArray(data.posts)?data.posts:[]).find(p=>String(p.monday_id)===id);
+  if(!post)throw Error('Post not found or you do not have access.');
+  open(post);
+ }catch(e){alert(e.message||'Unable to open post');}
+});
 function close(){if(save.disabled)return;shell.hidden=true;document.body.style.overflow='';}
 shell.querySelectorAll('.bp-close').forEach(b=>b.addEventListener('click',close));shell.addEventListener('click',e=>{if(e.target===shell)close()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!shell.hidden)close()});
 function decorate(){if(!canEdit())return;const desk=$('desk');if(desk&&!$('bp-create')){const b=document.createElement('button');b.id='bp-create';b.className='bp-create';b.textContent='＋ Create Post';desk.prepend(b);b.addEventListener('click',()=>open(null));}document.querySelectorAll('#cards article[data-post]').forEach(card=>{if(card.querySelector('.bp-edit'))return;const actions=card.querySelector('.post-actions');if(!actions)return;const b=document.createElement('button');b.type='button';b.className='bp-edit';b.textContent='✎ Edit post';b.addEventListener('click',()=>{const id=card.dataset.post;const org=[...card.querySelectorAll('.badges .badge')].at(-1)?.textContent.trim();const o=orgs().find(x=>x.name===org);const editId=id;const fetchPost=async()=>{const {data:{session}}=await db.auth.getSession();const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'bootstrap'})});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not load post');return d.posts.find(p=>String(p.monday_id)===editId&&(!o||p.organization_slug===o.slug));};fetchPost().then(p=>p?open(p):alert('Post not found. Refresh and retry.')).catch(e=>alert(e.message));});actions.append(b);});}
