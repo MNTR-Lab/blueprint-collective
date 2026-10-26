@@ -1,4 +1,4 @@
-// Blueprint Social Studio V12 — integrated media upload for Create/Edit Post.
+// Blueprint Social Studio V13 — integrated media upload for Create/Edit Post.
 // Load AFTER post-editor.js. The existing editor UI and permissions remain intact.
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const BASE='https://lbheezjanvalalinqxcd.supabase.co';
@@ -33,12 +33,20 @@ function setup(){if(installed)return;const form=document.getElementById('bp-form
  for(const ev of ['dragenter','dragover'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragging')});
  for(const ev of ['dragleave','drop'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragging')});
  drop.addEventListener('drop',e=>add(e.dataTransfer?.files||[]));
- const shell=document.querySelector('.bp-overlay');const observer=new MutationObserver(()=>{if(!shell.hidden)return;files=[];clearURLs();previews.replaceChildren();note.textContent='No new attachments selected.';progress.hidden=true;});observer.observe(shell,{attributes:true,attributeFilter:['hidden']});
+ const shell=document.querySelector('.bp-overlay');
+ // Keep the exact Monday item ID from the clicked card, not a title lookup.
+ // Titles are not unique, and editing the title must not turn an edit into a new post.
+ document.addEventListener('click',event=>{
+  const edit=event.target.closest('.bp-edit');
+  if(edit){const id=edit.closest('article[data-post]')?.dataset.post||'';shell.dataset.editPostId=/^\d+$/.test(id)?id:'';return;}
+  if(event.target.closest('#bp-create'))shell.dataset.editPostId='';
+ },true);
+ const observer=new MutationObserver(()=>{if(!shell.hidden)return;files=[];clearURLs();previews.replaceChildren();note.textContent='No new attachments selected.';progress.hidden=true;});observer.observe(shell,{attributes:true,attributeFilter:['hidden']});
  // Capture the submit BEFORE V11's bubble listener; replace only the save flow.
  form.addEventListener('submit',async e=>{e.preventDefault();e.stopImmediatePropagation();if(busy)return;
-  const button=shell.querySelector('.bp-save');const status=shell.querySelector('.bp-status');const currentId=(()=>{const heading=shell.querySelector('#bp-title')?.textContent||'';if(!heading.toLowerCase().includes('edit'))return '';const title=form.elements.title.value;const card=[...document.querySelectorAll('#cards article[data-post]')].find(c=>c.querySelector('h3')?.textContent===title);return card?.dataset.post||'';})();
-  // On edits, resolve ID from the actual post card; do not risk creating a duplicate.
-  if(shell.querySelector('#bp-title')?.textContent?.toLowerCase().includes('edit')&&!currentId){status.textContent='Cannot identify this post safely. Close the editor, refresh, and try again.';status.classList.add('bad');return;}
+  const button=shell.querySelector('.bp-save');const status=shell.querySelector('.bp-status');const editing=shell.querySelector('#bp-title')?.textContent?.toLowerCase().includes('edit');const currentId=editing?(shell.dataset.editPostId||''):'';
+  // Never use the title to resolve an edit; it can be changed or duplicated.
+  if(editing&&!/^\d+$/.test(currentId)){status.textContent='Cannot identify this post safely. Close the editor, refresh, and try again.';status.classList.add('bad');return;}
   busy=true;button.disabled=true;status.classList.remove('bad');let savedId='';let uploaded=0;
   try{const {data:{session},error}=await client.auth.getSession();if(error||!session)throw Error('Sign in again to save.');const values=Object.fromEntries(new FormData(form));const post={...values,client_visible:form.elements.client_visible.checked,audience:[],asset_link:values.asset_link||'',destination_link:values.destination_link||'',original_post_link:values.original_post_link||'',publish_at_et:values.publish_at_et||'',campaign:values.campaign||'',caption:values.caption||'',instructions:values.instructions||'',assigned_to:values.assigned_to||''};
    if(!post.title.trim()||!post.organization_slug||!post.platform.trim())throw Error('Organization, title and platform are required.');
