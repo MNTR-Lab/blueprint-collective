@@ -1,0 +1,50 @@
+BLUEPRINT COLLECTIVE — SOCIAL STUDIO v1
+
+Upload into the existing MNTR-Lab/blueprint-collective GitHub repository:
+  social/               (entire folder, including assets)
+  login.html            (full replacement; adds Social Studio to the workspace chooser)
+
+The backend has already been deployed to the existing Blueprint Collective Supabase project:
+  lbheezjanvalalinqxcd / blueprint-social
+The new database tables have already been created with RLS and client access revoked.
+Do not run backend/schema.sql again. backend/ is included as matching source and validation.
+
+After your normal GitHub deployment completes, open:
+  https://app.blueprintcollective.app/social/
+
+Sign in with your existing Blueprint account. Platform super admins and members of the existing Blueprint Collective organization have master access. Existing Wheeling CRM members inherit Wheeling access. Additional verified accounts can be assigned to organizations in Organizations & access. Granting access does not create an auth account or send an email. Use existing Blueprint staff account provisioning for new accounts.
+
+MONDAY MASTER BOARD
+  https://ai-apparel-group-inc.monday.com/boards/18437085764
+  Blueprint Collective — Social Media Master
+
+There are seven Fan Choice Friday items prepared as DRAFTS for review. In Monday, set Approval to Approved, or use Approve for staff in the hub. No public social posts have been sent or scheduled by this build.
+
+The backend uses SOCIAL_MONDAY_API_TOKEN when configured, otherwise the existing project MONDAY_API_TOKEN. If live refresh or approval shows a connection warning, add SOCIAL_MONDAY_API_TOKEN in Blueprint Collective Supabase / Edge Functions / Secrets using an existing MNTR+ Monday account token that can access this private board. Leave every other project's tokens unchanged. This is a one-time connection setting. No token is included in these files.
+
+BOARD FIELD RULES
+  Organization: a registered organization slug, e.g. nal, blueprint, wheeling-miners
+  Audience: optional additional registered slugs, comma-separated
+  Campaign: shared campaign name
+  Publish At ET: YYYY-MM-DDTHH:MM, e.g. 2026-10-26T12:00 (Eastern)
+  Platform: exact platform names, comma-separated when the caption is shared
+  Approval: Draft, Pending Review, or Approved (exact capitalization)
+  Content Role: Main Post, Share, Story, Reply, or Video
+  Asset Link: complete HTTPS image/video/download URL
+  Asset Type: Image, Video, or Document
+  Original Post Link: actual social post URL for shares/replies
+
+Monday is the master source for content and approval. Refresh pulls live board content when the connection is configured. During connection outages, a dated saved snapshot remains available; connection warnings are shown. Items removed from the board or moved into a group titled Archived are removed from staff views after a successful full sync.
+
+Publication records are stored per item, organization, and platform in the hub. Repeated saves update the same record. Staff manually publish on the social platforms and then record the resulting link. This version does not auto-post, retrieve CPM metrics, or write publication completion back into Monday.
+
+TEAM EMBEDS
+  From Organizations & access, choose an organization using the top selector and copy its embed code. Each staff member must sign in; URL changes cannot grant access to another team. The iframe origin is the Blueprint site. If a browser blocks sign-in storage inside an iframe, use Open the studio in a new tab.
+
+Example NAL page after deployment:
+  https://app.blueprintcollective.app/social/?organization=nal&embed=1
+
+VALIDATION
+  Backend mock integration checks passed for verified sign-in, master/team boundaries, distributed audience access, draft exclusion, access management, URL and platform validation, idempotent publication records, and staff rejection of approval changes.
+  The publishing desk, campaign view, assets, and organization/embed controls were inspected in a browser with isolated QA fixtures. QA mock data and authentication are not shipped.
+  A real signed-in staff test and live Monday-token connection still need verification after the frontend commit.

@@ -399,6 +399,8 @@ async function route() {
       !/^goat\s*sports$/i.test(String(o.name || '').trim())
     );
 
+    item('Social Studio', 'Content calendar, campaign assets and team publishing portals', '/social/');
+
     // PLATFORM SUPER ADMIN
     if (data.platform_super_admin) {
 
@@ -443,19 +445,6 @@ async function route() {
           : 'Employee Workspace',
         target + '?organization=' + encodeURIComponent(o.id)
       );
-    }
-
-    if (!data.platform_super_admin && visibleOrgs.length === 1) {
-      const o = visibleOrgs[0];
-
-      location.replace(
-        (o.role === 'admin'
-          ? '/index.html'
-          : '/employee.html') +
-        '?organization=' + encodeURIComponent(o.id)
-      );
-
-      return;
     }
 
     // Alphabetize all workspace options by their visible names.
@@ -566,3 +555,4 @@ if (session) {
 
 </body>
 </html>
+
