@@ -1,4 +1,4 @@
-// Blueprint Social Studio V38 — Five-tab employee workspace. UI only.
+// Blueprint Social Studio V40 — Five-tab employee workspace. UI only.
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id);
@@ -6,9 +6,10 @@ const tabs=[
  ['month','Monthly Calendar',['.bp-month']],
  ['week','Weekly Planner',['.bp-week']],
  ['day','Daily Publishing',['.bp-runsheet']],
- ['approvals','Approvals',['.bp-approval','.bp-ready','.bp-clientvis']],
+ ['approvals','Approvals',['.bp-approval','.bp-ready']],
  ['reports','Reports',['.bp-coverage','.bp-brief','.bp-health','.bp-export']]
 ];
+const retired=['.bp-clientvis'];
 const extra=['.bp-flow','.bp-attention','.bp-finder','.bp-handoff'];
 let active='month';
 try{const x=localStorage.getItem('bp-social-v38-tab');if(tabs.some(t=>t[0]===x))active=x;}catch(_){}
@@ -51,6 +52,7 @@ function draw(){
   el.classList.remove('bp-folded','bp-tool-hidden','bp-v38-hidden');
   el.querySelectorAll(':scope > .bp-fold-toggle').forEach(b=>b.remove());
  }
+ for(const selector of retired){const el=desk.querySelector(selector);if(el)el.classList.add('bp-v38-hidden');}
  // Avoid repeating the separate workspace tools in other tabs.
 }
 nav.addEventListener('click',e=>{const key=e.target.closest('[data-tab]')?.dataset.tab;if(!tabs.some(t=>t[0]===key))return;active=key;try{localStorage.setItem('bp-social-v38-tab',key);}catch(_){}draw();});
