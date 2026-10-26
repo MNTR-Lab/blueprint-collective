@@ -1,23 +1,21 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blueprint Collective | Social Studio</title><meta name="description" content="Blueprint Collective Social Studio — your content, campaigns and publishing in one workspace."><link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="login-redesign.css"><link rel="stylesheet" href="blueprint-brand.css"></head><body>
-<section id="login" class="login">
-  <div class="login-intro">
-    <div class="login-brand"><img class="official-blueprint-logo" src="https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective-white.png?v=1791560539" alt="Blueprint Collective"></div>
-    <div class="login-hero"><span class="hero-kicker"><span class="pulse"></span> THE BLUEPRINT WORKSPACE <span class="kicker-line"></span> SOCIAL STUDIO</span><h1>Your content.<br>Your campaigns.<br><em>One platform.</em></h1><p>Plan, manage, approve, and distribute content across every organization you serve.</p>
-      <div class="hero-features"><div><span class="feature-icon">◫</span><span>Campaign planning</span></div><div><span class="feature-icon">▦</span><span>Content calendars</span></div><div><span class="feature-icon">✓</span><span>Team collaboration</span></div></div>
-    </div>
-    <div class="login-foot"><span>© Blueprint Collective</span><span>Built for teams that build brands.</span></div>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blueprint Collective | Social Studio</title><meta name="description" content="Blueprint Collective Social Studio — your content, campaigns and publishing in one workspace."><link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="login-redesign.css"><link rel="stylesheet" href="blueprint-brand.css"><link rel="stylesheet" href="main-login-match.css"></head><body>
+<section id="login" class="login blueprint-main-login">
+  <div class="login-intro" aria-label="Blueprint Collective Social Studio">
+    <div class="social-identity">SOCIAL STUDIO <span>·</span> BLUEPRINT COLLECTIVE</div>
   </div>
-  <div class="login-form-side"><div class="form-top"><span class="form-top-badge">SECURE WORKSPACE ACCESS</span><span class="form-top-dot"></span></div>
-    <form id="loginForm" class="login-card"><span class="login-welcome">WELCOME BACK</span><h2>Sign in to your<br>workspace<span class="title-period">.</span></h2><p class="login-description">Enter your Blueprint Collective credentials to continue.</p>
-      <label for="email">Work email address<input id="email" type="email" autocomplete="username" placeholder="name@company.com" required></label>
-      <div class="password-label"><label for="password">Password</label><a href="../login.html" target="_top">Forgot password?</a></div>
-      <div class="password-wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Enter your password" required><button id="togglePassword" type="button" aria-label="Show password" aria-pressed="false">Show</button></div>
-      <button class="primary login-submit" id="signIn">Sign in to Social Studio <span aria-hidden="true">→</span></button>
+  <div class="login-form-side">
+    <form id="loginForm" class="login-card">
+      <h2>Welcome Back</h2>
+      <p class="login-description">Sign in to access your Blueprint Collective Social Studio workspace.</p>
+      <label for="email">Email Address<input id="email" type="email" autocomplete="username" placeholder="you@company.com" required></label>
+      <label for="password">Password</label>
+      <div class="password-wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Enter password" required><button id="togglePassword" type="button" aria-label="Show password" aria-pressed="false">Show</button></div>
+      <button class="primary login-submit" id="signIn">Sign In →</button>
+      <a class="login-forgot" href="../login.html" target="_top">Forgot password?</a>
       <p id="loginError" class="error" role="alert"></p>
-      <div class="login-support"><span class="secure-icon">◈</span><span>Private access for authorized team members.</span></div>
-      <p class="login-alt">Embedded sign-in not working? <a id="openStandalone" target="_blank" rel="noopener">Open in a new tab ↗</a></p>
+      <div class="login-help">Need access? Contact your Blueprint administrator.<br>Blueprint Collective · Secure organization access</div>
+      <p class="login-alt">Embedded sign-in unavailable? <a id="openStandalone" target="_blank" rel="noopener">Open in a new tab ↗</a></p>
     </form>
-    <div class="form-footer">BLUEPRINT COLLECTIVE <span> / </span> SOCIAL STUDIO</div>
   </div>
 </section>
 <div id="app" hidden>
