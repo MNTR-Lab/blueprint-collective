@@ -1,4 +1,4 @@
-// Blueprint Social Studio V21 — Content Finder. Read-only authenticated search.
+// Blueprint Social Studio V32 — Content Finder with authorized edit action.
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const BASE='https://lbheezjanvalalinqxcd.supabase.co';
 const KEY='sb_publishable_PVlEl61mo7WEm_0AiaIMAw_Us8xIXqC';
@@ -13,9 +13,10 @@ const css=document.createElement('style');css.textContent=`
 .bp-finder-row strong{font-size:13px;color:#1b385a}.bp-finder-row small{display:block;font-size:11px;color:#607a99;margin-top:5px}.bp-finder-row button{border:1px solid #cbd9eb;background:#edf4ff;border-radius:9px;padding:8px 11px;color:#235c9e;font-weight:750;cursor:pointer}
 .bp-finder-status{font-size:11px;color:#607a99;margin-top:9px}.bp-finder-error{color:#b42318!important}
 `;document.head.append(css);
-const panel=document.createElement('section');panel.className='bp-finder';panel.hidden=true;panel.innerHTML=`<h2>Find content across your workspace</h2><p>Search authorized posts across dates, captions, platforms and organizations. Results are read-only.</p><div class="bp-finder-controls"><input id="bp-finder-query" type="search" placeholder="Search title, caption, platform…" aria-label="Search all authorized content"><select id="bp-finder-status" aria-label="Approval status"><option value="">All statuses</option><option>Draft</option><option>Pending Review</option><option>Approved</option></select><button type="button" id="bp-finder-refresh">↻ Refresh</button></div><div class="bp-finder-results" aria-live="polite"></div><div class="bp-finder-status" role="status"></div>`;
+const panel=document.createElement('section');panel.className='bp-finder';panel.hidden=true;panel.innerHTML=`<h2>Find content across your workspace</h2><p>Search authorized posts across dates, captions, platforms and organizations. Master users can edit a result directly without opening Monday.</p><div class="bp-finder-controls"><input id="bp-finder-query" type="search" placeholder="Search title, caption, platform…" aria-label="Search all authorized content"><select id="bp-finder-status" aria-label="Approval status"><option value="">All statuses</option><option>Draft</option><option>Pending Review</option><option>Approved</option></select><button type="button" id="bp-finder-refresh">↻ Refresh</button></div><div class="bp-finder-results" aria-live="polite"></div><div class="bp-finder-status" role="status"></div>`;
 let records=[],loading=false,initialized=false,token=0,debounce;
 const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function canEdit(){return !$('app')?.hidden&&$('accessBadge')?.textContent.includes('MASTER');}
 function paint(){
  const desk=$('desk');if(!desk||$('app')?.hidden||desk.hidden){panel.hidden=true;return;}
  if(!panel.isConnected){const anchor=desk.querySelector('.section-top');anchor?anchor.before(panel):desk.prepend(panel);}
@@ -27,7 +28,7 @@ function paint(){
   if(!query)return true;
   return [p.title,p.caption,p.organization_slug,p.platform,p.approval,p.publish_at_et].some(v=>String(v??'').toLowerCase().includes(query));
  }).sort((a,b)=>String(b.publish_at_et||'').localeCompare(String(a.publish_at_et||'')));
- panel.querySelector('.bp-finder-results').innerHTML=matches.slice(0,40).map(p=>`<div class="bp-finder-row"><div><strong>${escapeHtml(p.title||'Untitled post')}</strong><small>${escapeHtml(p.organization_slug)} · ${escapeHtml(p.approval)} · ${escapeHtml(p.platform)} · ${escapeHtml(p.publish_at_et||'No date')} ET${p.archived?' · Archived':''}</small></div><button type="button" data-find-id="${escapeHtml(p.monday_id)}">Find on desk ↗</button></div>`).join('')||'<p>No posts match these filters.</p>';
+ panel.querySelector('.bp-finder-results').innerHTML=matches.slice(0,40).map(p=>`<div class="bp-finder-row"><div><strong>${escapeHtml(p.title||'Untitled post')}</strong><small>${escapeHtml(p.organization_slug)} · ${escapeHtml(p.approval)} · ${escapeHtml(p.platform)} · ${escapeHtml(p.publish_at_et||'No date')} ET${p.archived?' · Archived':''}</small></div><button type="button" data-find-id="${escapeHtml(p.monday_id)}">Find on desk ↗</button>${canEdit()&&!p.archived?`<button type="button" data-edit-id="${escapeHtml(p.monday_id)}">✎ Edit Post</button>`:""}</div>`).join('')||'<p>No posts match these filters.</p>';
  const msg=panel.querySelector('.bp-finder-status');if(!msg.classList.contains('bp-finder-error'))msg.textContent=`${matches.length} matching post${matches.length===1?'':'s'}${matches.length>40?' · Showing first 40':''}.`;
 }
 async function refresh(){
@@ -50,6 +51,7 @@ function init(){
  $('refresh')?.addEventListener('click',()=>setTimeout(refresh,300));
  $('signOut')?.addEventListener('click',()=>{records=[];token++;panel.hidden=true;});
  panel.querySelector('.bp-finder-results').addEventListener('click',event=>{
+  const edit=event.target.closest('[data-edit-id]');if(edit){if(!canEdit())return;const post=records.find(p=>String(p.monday_id)===edit.dataset.editId);if(post&&!post.archived)document.dispatchEvent(new CustomEvent('blueprint:edit-post',{detail:{monday_id:post.monday_id}}));return;}
   const btn=event.target.closest('[data-find-id]');if(!btn)return;
   const post=records.find(p=>String(p.monday_id)===btn.dataset.findId);if(!post)return;
   const all=desk.querySelector('[data-view="all"]');if(all)all.click();
