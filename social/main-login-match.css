@@ -1,0 +1,21 @@
+/* Social Studio login aligned to the main Blueprint Collective login page.
+   Uses the exact same architectural background asset as /login.html. */
+#login.blueprint-main-login{position:relative;min-height:100svh;display:block;background:#081b34 url("https://cdn.shopify.com/s/files/1/0719/1966/5231/files/Blueprint_Collective_Workspace.png?v=1793017709") center center/cover no-repeat}
+#login.blueprint-main-login .login-intro{display:none}
+#login.blueprint-main-login .login-form-side{position:relative;z-index:2;width:min(37.3vw,590px);min-width:420px;min-height:min(86.5vh,900px);margin-left:auto;margin-right:clamp(20px,2.85vw,65px);top:clamp(20px,4.55vh,70px);padding:clamp(26px,3vw,48px);border:1px solid #e1e7ef;border-radius:19px;background:rgba(248,250,254,.995);box-shadow:0 24px 80px #00142d44;display:flex;align-items:center;justify-content:center}
+#login.blueprint-main-login .login-card{max-width:none;padding:0;width:100%;margin:0}
+#login.blueprint-main-login .login-card h2{font-size:clamp(25px,2.3vw,35px);letter-spacing:-.04em;text-align:center;margin:0 0 9px;font-weight:800;line-height:1.2}
+#login.blueprint-main-login .login-card .login-description{text-align:center;color:#62728a;font-size:14px;line-height:1.5;margin:0 0 25px}
+#login.blueprint-main-login .login-card label{display:block;color:#46576f;font-size:12px;font-weight:700;margin:15px 0 8px}
+#login.blueprint-main-login .login-card input{height:auto;min-height:49px;margin:0 0 15px;padding:14px;border:1px solid #ccd6e5;border-radius:10px;background:#fff;color:#12243c;box-shadow:none}
+#login.blueprint-main-login .login-card input:focus{border-color:#1677ee;outline:0;box-shadow:0 0 0 3px #1677ee20}
+#login.blueprint-main-login .login-submit{display:block;text-align:center;background:#1479f5;border-color:#1479f5;color:white;font-size:14px;font-weight:700;border-radius:9px;margin:20px 0 0;min-height:49px;box-shadow:none}
+#login.blueprint-main-login .login-submit:hover{background:#0969d8}
+#login.blueprint-main-login .login-forgot{display:block;text-align:center;font-size:13px;font-weight:650;margin:14px auto 0;color:#086fe4}
+#login.blueprint-main-login .login-help{text-align:center;color:#8995a7;font-size:11px;line-height:1.6;margin-top:32px}
+#login.blueprint-main-login .login-alt{text-align:center;font-size:11px;margin-top:16px;color:#8995a7}
+#login.blueprint-main-login .password-wrap button{top:7px}
+#login.blueprint-main-login .error{min-height:17px;text-align:center;font-size:12px;margin-top:12px}
+@media(max-width:1100px){#login.blueprint-main-login{background-position:36% center}#login.blueprint-main-login .login-form-side{min-width:390px;width:43vw;padding:27px}}
+@media(max-width:760px){#login.blueprint-main-login{display:flex;align-items:center;justify-content:center;padding:22px 14px;background-position:31% center}#login.blueprint-main-login:before{content:"";position:absolute;inset:0;background:#03172b75}#login.blueprint-main-login .login-form-side{top:auto;margin:0;min-width:0;width:min(100%,500px);min-height:0;padding:30px 24px}}
+@media(max-height:740px) and (min-width:761px){#login.blueprint-main-login .login-form-side{top:14px;min-height:0;padding:22px 32px}}
