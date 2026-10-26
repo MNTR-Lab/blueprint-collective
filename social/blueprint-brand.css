@@ -1,0 +1,12 @@
+/* Official Blueprint Collective branding aligned with the primary CRM */
+.login-brand{display:flex;align-items:center;justify-content:flex-start}
+.login-brand .brand-symbol,.login-brand .brand-lockup{display:none}
+.login-brand .official-blueprint-logo{display:block;width:min(310px,85%);height:auto;max-height:128px;object-fit:contain;object-position:left center}
+.sidebar>a.wordmark{font-size:0;letter-spacing:0;display:flex;align-items:center;min-height:90px}
+.sidebar>a.wordmark span{display:none}
+.sidebar>a.wordmark .official-blueprint-logo{width:100%;max-width:195px;max-height:108px;object-fit:contain;display:block}
+:root{--navy:#11253e;--blue:#163b65;--brand:#163b65}
+.login-intro{background:radial-gradient(circle at 80% 24%,#28548370,transparent 45%),linear-gradient(145deg,#0b1e35,#11253e 72%,#183e64)}
+.login-hero h1 em{color:#a9c7ee}
+.login-card .login-submit{box-shadow:0 9px 24px #163b652a}
+@media(max-width:750px){.sidebar>a.wordmark{min-height:54px}.sidebar>a.wordmark .official-blueprint-logo{max-width:135px;max-height:58px}}
