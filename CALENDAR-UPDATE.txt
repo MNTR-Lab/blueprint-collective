@@ -1,0 +1,18 @@
+BLUEPRINT CLIENT CALENDAR UPDATE
+
+The backend is already deployed. No token changes or SQL steps are needed.
+
+1. Upload the included social folder into MNTR-Lab/blueprint-collective, replacing the matching files. Commit the changes and allow the normal site deployment to finish.
+2. Open Social Studio and select NAL. For each item you want clients to see, choose Approve for staff, then Show on client calendar. Alternatively, set Monday Approval to Approved and Client Visible to Yes. Blank or No stays private.
+3. Open https://app.blueprintcollective.app/social/calendar.html?organization=nal
+
+Embed on the NAL client page:
+<iframe src="https://app.blueprintcollective.app/social/calendar.html?organization=nal" title="NAL Social Media Calendar" width="100%" height="1100" style="border:0;display:block" loading="lazy"></iframe>
+
+For another client, replace nal with their organization slug. Social Studio's Organizations & access panel can generate the appropriate embed code.
+
+The public calendar requires no login. It displays only explicitly shared, approved items for that organization, including dates, platforms, graphics, captions and destination links. Internal instructions and staff details are excluded. Month and agenda views are available. Times are Eastern.
+
+Updates in Monday appear when the calendar is loaded or refreshed. This calendar displays the schedule; it does not automatically publish social posts.
+
+The backend folder contains matching source and verification files for reference. It does not need to be uploaded into the website's social folder.

@@ -9,7 +9,7 @@ const safeURL=(s:unknown)=>{try{const u=new URL(String(s));return ['https:','htt
 function canSee(p:any,scopes:Set<string>,master:boolean){return master || (p.approval==='Approved'&&!p.archived&&[p.organization_slug,...(p.audience||[])].some(s=>scopes.has(s)));}
 function normalize(item:any,columns:Map<string,string>){
  const c=Object.fromEntries((item.column_values||[]).map((v:any)=>[columns.get(v.id)||v.id,v.text||'']));
- return {monday_id:item.id,title:item.name,organization_slug:c.Organization.trim(),audience:(c.Audience||'').split(',').map((s:string)=>s.trim()).filter(Boolean),campaign:c.Campaign,publish_at_et:c['Publish At ET'],platform:c.Platform,caption:c.Caption,destination_link:safeURL(c['Destination Link']),asset_link:safeURL(c['Asset Link']),asset_type:c['Asset Type']||'Image',instructions:c.Instructions,approval:c.Approval||'Draft',assigned_to:c['Assigned To'],content_role:c['Content Role']||'Main Post',original_post_link:safeURL(c['Original Post Link']),archived:item.group?.title==='Archived',synced_at:new Date().toISOString()};
+ return {monday_id:item.id,title:item.name,organization_slug:c.Organization.trim(),audience:(c.Audience||'').split(',').map((s:string)=>s.trim()).filter(Boolean),campaign:c.Campaign,publish_at_et:c['Publish At ET'],platform:c.Platform,caption:c.Caption,destination_link:safeURL(c['Destination Link']),asset_link:safeURL(c['Asset Link']),asset_type:c['Asset Type']||'Image',instructions:c.Instructions,approval:c.Approval||'Draft',client_visible:/^yes$/i.test((c['Client Visible']||'').trim()),assigned_to:c['Assigned To'],content_role:c['Content Role']||'Main Post',original_post_link:safeURL(c['Original Post Link']),archived:item.group?.title==='Archived',synced_at:new Date().toISOString()};
 }
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers});
@@ -73,6 +73,15 @@ Deno.serve(async req=>{
    const e=body.email.trim().toLowerCase();
    const result=action==='access_grant'?await db.from('social_hub_access').upsert({email:e,organization_slug:body.organization_slug,granted_by:user.id},{onConflict:'email,organization_slug'}):await db.from('social_hub_access').delete().eq('email',e).eq('organization_slug',body.organization_slug);
    if(result.error)throw result.error;return reply({success:true});
+  }
+  if(action==='calendar_visibility_set'){
+   if(!master)return fail('Blueprint master access required',403);
+   if(typeof body.visible!=='boolean'||!/^\d+$/.test(String(body.monday_id)))return fail('Invalid visibility setting');
+   const {data:post,error:pe}=await db.from('social_hub_posts').select('approval').eq('monday_id',String(body.monday_id)).maybeSingle();if(pe)throw pe;
+   if(!post)return fail('Post not found',404);if(body.visible&&post.approval!=='Approved')return fail('Approve this post before showing it on the client calendar',409);
+   const result=await monday('mutation($b:ID!,$i:ID!,$v:JSON!){change_multiple_column_values(board_id:$b,item_id:$i,column_values:$v){id}}',{b:BOARD,i:String(body.monday_id),v:JSON.stringify({text_mm8g5dp2:body.visible?'Yes':'No'})});
+   if(!result.change_multiple_column_values?.id)return fail('Calendar visibility could not be saved',502);
+   const {error}=await db.from('social_hub_posts').update({client_visible:body.visible}).eq('monday_id',String(body.monday_id));if(error)throw error;return reply({success:true});
   }
   if(action==='approval_set'){
    if(!master)return fail('Blueprint master access required',403);
